@@ -17,3 +17,6 @@ env/
 
 # staticfiles
 staticfiles/
+
+# hide workspace
+*.code-workspace
