@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "django"
+		},
+		{
+			"path": "fast_api"
+		}
+	],
+	"settings": {
+		"python-envs.defaultEnvManager": "ms-python.python:pipenv"
+	}
+}
