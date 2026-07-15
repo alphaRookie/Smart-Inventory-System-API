@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _ 
 from django.core.validators import MinValueValidator, MaxValueValidator
+from decimal import Decimal
 
 
 class Shelf(models.Model): #enough only 4 shelfs
@@ -38,7 +39,7 @@ class Sales(models.Model):
     date = models.DateTimeField(db_index=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity_sold = models.IntegerField()
-    total_revenue = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
+    total_revenue = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], default=Decimal("0.00"), blank=True)
 
     def __str__(self):
         return f"Sales data of: {self.product.name}"
