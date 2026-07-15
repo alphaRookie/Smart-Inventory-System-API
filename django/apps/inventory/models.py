@@ -38,7 +38,7 @@ class Sales(models.Model):
     id: int
     date = models.DateTimeField(db_index=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity_sold = models.IntegerField()
+    quantity_sold = models.PositiveIntegerField()
     total_revenue = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], default=Decimal("0.00"), blank=True)
 
     def __str__(self):
@@ -49,7 +49,7 @@ class WeatherRecord(models.Model):
     id: int
     date = models.DateTimeField(db_index=True)
     avg_temp = models.DecimalField(max_digits=4, decimal_places=1)
-    humidity = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(100)]) 
+    humidity = models.PositiveIntegerField(validators=[MinValueValidator(0), MaxValueValidator(100)]) 
     condition = models.CharField(max_length=50)
 
     def __str__(self):
@@ -60,8 +60,8 @@ class WeatherRecord(models.Model):
 class OrderPrediction(models.Model):
     id: int
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    demand_prediction = models.IntegerField()
-    order_suggestion = models.IntegerField()
+    demand_prediction = models.PositiveIntegerField()
+    order_suggestion = models.PositiveIntegerField()
     target_timing = models.DateTimeField()
 
     def __str__(self):
