@@ -3,16 +3,25 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 
-class Product(models.Model):
+class Shelf(models.Model): #enough only 4 shelfs
     class Category(models.TextChoices):
-        NON_CATEGORY = "NON_CATEGORY", _("Non-Category")
-        CATEGORY_A = "CATEGORY_A", _("Category A")
-        CATEGORY_B = "CATEGORY_B", _("Category B")
-        CATEGORY_C = "CATEGORY_C", _("Category C")
+        PERISHABLE = "PERISHABLE", _("Perishable Goods")          # Fresh milk, meat, vegetables
+        NON_PERISHABLE = "NON_PERISHABLE", _("Non-Perishable Goods")  # Canned food, grains
+        FROZEN = "FROZEN", _("Frozen Food")                       # Requires freezer storage
+        HAZMAT = "HAZMAT", _("Hazardous Materials")               # Chemicals, cleaning supplies
+    id: int
+    category = models.CharField(max_length=50, choices=Category.choices)
+    current_stock = models.PositiveIntegerField(default=0) 
+    max_shelf_capacity = models.PositiveIntegerField()
 
+    def __str__(self):
+        return f"Shelf category:{self.category} ; Id:{self.id}"
+
+
+class Product(models.Model):
     id: int
     name = models.CharField(max_length=100)
-    category = models.CharField(max_length=50, choices=Category.choices, default=Category.NON_CATEGORY)
+    shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
     expire_date = models.DateTimeField(db_index=True)
     shelf_life = models.IntegerField(editable=False) # autofill from service.py
     unit_cost = models.IntegerField()
@@ -42,18 +51,8 @@ class WeatherRecord(models.Model):
 
     def __str__(self):
         return f"Weather data at {self.date}"
+
     
-
-class StockLevel(models.Model):
-    id: int
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    current_stock = models.IntegerField()
-    max_shelf_capacity = models.IntegerField()
-
-    def __str__(self):
-        return f"Stock of {self.product.name}: {self.current_stock} left"
-    
-
 #this is only just for showing info to help, it cant make decision
 class OrderPrediction(models.Model):
     id: int
