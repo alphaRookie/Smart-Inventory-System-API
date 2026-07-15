@@ -23,10 +23,12 @@ class Product(models.Model):
     name = models.CharField(max_length=100)
     shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
     expire_date = models.DateTimeField(db_index=True)
-    shelf_life = models.IntegerField(editable=False) # autofill from service.py
-    unit_cost = models.IntegerField()
+    shelf_life = models.PositiveIntegerField(editable=False) # autofill from service.py
+    quantity = models.PositiveIntegerField(default=0)
+    unit_cost = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
     selling_price = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
-
+    is_deleted = models.BooleanField(default=False)
+    
     def __str__(self):
         return self.name
 
