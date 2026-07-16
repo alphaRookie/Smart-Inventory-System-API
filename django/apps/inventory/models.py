@@ -36,24 +36,13 @@ class Product(models.Model):
 
 class Sales(models.Model):
     id: int
-    date = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(db_index=True, auto_now_add=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity_sold = models.PositiveIntegerField()
     total_revenue = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], default=Decimal("0.00"), blank=True)
 
     def __str__(self):
         return f"Sales data of: {self.product.name}"
-    
-
-class WeatherRecord(models.Model):
-    id: int
-    date = models.DateTimeField(db_index=True)
-    avg_temp = models.DecimalField(max_digits=4, decimal_places=1)
-    humidity = models.PositiveIntegerField(validators=[MinValueValidator(0), MaxValueValidator(100)]) 
-    condition = models.CharField(max_length=50)
-
-    def __str__(self):
-        return f"Weather data at {self.date}"
 
     
 #this is only just for showing info to help, it cant make decision
