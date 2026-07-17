@@ -6,6 +6,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "shelf", "expire_date", "shelf_life", "quantity", "unit_cost", "selling_price", "is_deleted") # use tuple(unchangeable) instead of list 
     readonly_fields = ("shelf_life",)
     list_filter = ("shelf",)
+    search_fields = ("name",) 
     date_hierarchy = "expire_date" 
     
 
