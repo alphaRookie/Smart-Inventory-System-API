@@ -70,3 +70,56 @@ class ProductItemAPIView(APIView):
         ProductService.delete_product(product=product, shelf=shelf)
         return Response({"message": f"{product.name} deleted"},status=status.HTTP_200_OK)
 
+
+
+class ShelfAPIView(APIView):
+
+    def get(self, request):
+        shelf = Shelf.objects.all() 
+        serializer = ShelfSerializer(shelf, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        serializer = ShelfSerializer(data = request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
+        shelf = ShelfService.save_shelf(
+            shelf=None,
+            category=validated_data.get("category"),
+            max_shelf_capacity=validated_data.get("max_shelf_capacity"),
+            current_stock=validated_data.get("current_stock"),
+        )
+        return Response({
+            "message": "New shelf added",
+            "stock level": ShelfSerializer(shelf).data 
+        }, status=status.HTTP_201_CREATED)
+    
+    
+class ShelfItemAPIView(APIView):
+
+    def get(self, request, pk):
+        shelf = get_object_or_404(Shelf, pk=pk) 
+        serializer = ShelfSerializer(shelf) 
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        shelf = get_object_or_404(Shelf, pk=pk)
+        serializer = ShelfSerializer(shelf, data = request.data, partial=True) 
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data)
+        updated_shelf = ShelfService.save_shelf(
+            shelf=shelf,
+            category=validated_data.get("category"),
+            max_shelf_capacity=validated_data.get("max_shelf_capacity"),
+            current_stock=validated_data.get("current_stock"),
+        )
+        return Response({
+            "message": "Shelf updated",
+            "shelf": ShelfSerializer(updated_shelf).data
+        }, status=status.HTTP_200_OK) 
+
+    def delete(self, request, pk):
+        shelf = get_object_or_404(Shelf, pk=pk)
+        shelf_id = shelf.id
+        shelf.delete()
+        return Response({"message": f"Shelf id: {shelf_id} deleted"},status=status.HTTP_200_OK)  
