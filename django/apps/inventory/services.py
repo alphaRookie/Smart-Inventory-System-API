@@ -87,3 +87,25 @@ class ShelfService():
                 max_shelf_capacity=max_shelf_capacity,
                 current_stock=0 # Initiate stock by 0
             )
+
+
+class SalesService():
+
+    @staticmethod
+    def save_sales(
+        product:Product,
+        quantity_sold:int,
+        shelf: Shelf,
+    ):
+        sales = Sales.objects.create(
+            product=product,
+            quantity_sold=quantity_sold,
+        )
+
+        if quantity_sold and product:
+            sales.total_revenue = quantity_sold * product.selling_price
+        else:
+            sales.total_revenue = Decimal("0")
+            
+        sales.save()
+        return sales
