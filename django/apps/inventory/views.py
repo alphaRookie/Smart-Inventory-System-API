@@ -123,3 +123,41 @@ class ShelfItemAPIView(APIView):
         shelf_id = shelf.id
         shelf.delete()
         return Response({"message": f"Shelf id: {shelf_id} deleted"},status=status.HTTP_200_OK)  
+
+
+
+class SalesAPIView(APIView):
+
+    def get(self, request):
+        sales = Sales.objects.all() 
+        serializer = SalesSerializer(sales, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        serializer = SalesSerializer(data = request.data) # JSON to Model
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
+        sales = SalesService.save_sales(
+            created_at=validated_data["created_at"], # STRICT TYPE --because we dont allow patch
+            product=validated_data["product"],
+            quantity_sold=validated_data["quantity_sold"],
+            shelf=validated_data.get("shelf"), #type:ignore --returns None instead of throwing a KeyError
+        )
+        return Response({
+            "message": "New sales added",
+            "sales": SalesSerializer(sales).data 
+        }, status=status.HTTP_201_CREATED)
+    
+    
+class SalesItemAPIView(APIView):
+
+    def get(self, request, pk):
+        sales = get_object_or_404(Sales, pk=pk) 
+        serializer = SalesSerializer(sales) # no need `many=True` bcoz return single obj (Model to JSON)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        sales = get_object_or_404(Sales, pk=pk)
+        sales_id = sales.id
+        sales.delete()
+        return Response({"message": f"Sales id: {sales_id} deleted"},status=status.HTTP_200_OK)
