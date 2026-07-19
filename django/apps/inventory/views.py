@@ -137,9 +137,8 @@ class SalesAPIView(APIView):
         serializer = SalesSerializer(data = request.data) # JSON to Model
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
-        sales = SalesService.save_sales(
-            created_at=validated_data["created_at"], # STRICT TYPE --because we dont allow patch
-            product=validated_data["product"],
+        sales = SalesService.save_sales( # no need to include "created_at" in views bcoz it's auto add
+            product=validated_data["product"],# STRICT TYPE --because we dont allow patch
             quantity_sold=validated_data["quantity_sold"],
             shelf=validated_data.get("shelf"), #type:ignore --returns None instead of throwing a KeyError
         )
