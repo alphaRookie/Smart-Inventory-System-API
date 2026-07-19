@@ -62,3 +62,28 @@ class ProductService():
             product.is_deleted = True # mark with soft delete
             product.save()
             return shelf
+
+
+class ShelfService():
+
+    @staticmethod
+    def save_shelf(
+        shelf: Shelf | None=None,
+        category: str | None=None,
+        max_shelf_capacity: int | None=None,
+        current_stock: int | None=None,
+    ):
+        if shelf:
+            shelf.category = category if category is not None else shelf.category
+            shelf.max_shelf_capacity = max_shelf_capacity if max_shelf_capacity is not None else shelf.max_shelf_capacity
+            shelf.current_stock = current_stock if current_stock is not None else shelf.current_stock
+
+            shelf.save()
+            return shelf
+
+        else:
+            return Shelf.objects.create(
+                category=category,
+                max_shelf_capacity=max_shelf_capacity,
+                current_stock=0 # Initiate stock by 0
+            )
