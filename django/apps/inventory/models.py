@@ -4,7 +4,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 
 
-class Shelf(models.Model): #enough only 4 shelfs
+class Shelf(models.Model):
     class Category(models.TextChoices):
         PERISHABLE = "PERISHABLE", _("Perishable Goods")          # Fresh milk, meat, vegetables
         NON_PERISHABLE = "NON_PERISHABLE", _("Non-Perishable Goods")  # Canned food, grains
@@ -20,9 +20,14 @@ class Shelf(models.Model): #enough only 4 shelfs
 
 
 class Product(models.Model):
+    class WeatherBehavior(models.TextChoices):
+        HEAT_BOOST = "HEAT_BOOST", _("Heat-Responsive") # Sales goes up when it's hot
+        COLD_BOOST = "COLD_BOOST", _("Cold-Responsive") # Sales goes up when it's cold
+        WEATHER_NEUTRAL = "WEATHER_NEUTRAL", _("All-Weather") # Sales are steady, ignore the weather
     id: int
     name = models.CharField(max_length=100)
     shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
+    type = models.CharField(max_length=50, choices=WeatherBehavior.choices)
     expire_date = models.DateTimeField(db_index=True)
     shelf_life = models.PositiveIntegerField(editable=False) # autofill from service.py
     quantity = models.PositiveIntegerField(default=0)
@@ -36,7 +41,7 @@ class Product(models.Model):
 
 class Sales(models.Model):
     id: int
-    created_at = models.DateTimeField(db_index=True, auto_now_add=True)
+    created_at = models.DateTimeField(db_index=True, auto_now_add=True) # no need to add in views anymore
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity_sold = models.PositiveIntegerField()
     total_revenue = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)], default=Decimal("0.00"), blank=True)
