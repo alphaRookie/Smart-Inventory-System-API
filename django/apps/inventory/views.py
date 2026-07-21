@@ -22,14 +22,7 @@ class ProductAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
         product = ProductService.save_product(
-            product=None,
-            name=validated_data.get("name"),
-            shelf=validated_data.get("shelf"),
-            type=validated_data.get("type"),
-            expire_date=validated_data.get("expire_date"),
-            quantity=validated_data.get("quantity"),
-            unit_cost=validated_data.get("unit_cost"),
-            selling_price=validated_data.get("selling_price"),
+            product=None, **validated_data
         )
         return Response({
             "message": "New product added",
@@ -50,14 +43,7 @@ class ProductItemAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data)
         updated_product = ProductService.save_product(
-            product=product,
-            name=validated_data.get("name"),
-            shelf=validated_data.get("shelf"),
-            type=validated_data.get("type"),
-            expire_date=validated_data.get("expire_date"),
-            quantity=validated_data.get("quantity"),
-            unit_cost=validated_data.get("unit_cost"),
-            selling_price=validated_data.get("selling_price"),
+            product=product, **validated_data
         )
         return Response({
             "message": "Product updated",
@@ -84,10 +70,7 @@ class ShelfAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
         shelf = ShelfService.save_shelf(
-            shelf=None,
-            category=validated_data.get("category"),
-            max_shelf_capacity=validated_data.get("max_shelf_capacity"),
-            current_stock=validated_data.get("current_stock"),
+            shelf=None, **validated_data
         )
         return Response({
             "message": "New shelf added",
@@ -108,10 +91,7 @@ class ShelfItemAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data)
         updated_shelf = ShelfService.save_shelf(
-            shelf=shelf,
-            category=validated_data.get("category"),
-            max_shelf_capacity=validated_data.get("max_shelf_capacity"),
-            current_stock=validated_data.get("current_stock"),
+            shelf=shelf, **validated_data
         )
         return Response({
             "message": "Shelf updated",
@@ -136,11 +116,9 @@ class SalesAPIView(APIView):
     def post(self, request):
         serializer = SalesSerializer(data = request.data) # JSON to Model
         serializer.is_valid(raise_exception=True)
-        validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
-        sales = SalesService.save_sales( # no need to include "created_at" in views bcoz it's auto add
-            product=validated_data["product"],# STRICT TYPE --because we dont allow patch
-            quantity_sold=validated_data["quantity_sold"],
-            shelf=validated_data.get("shelf"), #type:ignore --returns None instead of throwing a KeyError
+        validated_data = cast(dict, serializer.validated_data) 
+        sales = SalesService.save_sales( 
+            **validated_data
         )
         return Response({
             "message": "New sales added",
@@ -160,3 +138,4 @@ class SalesItemAPIView(APIView):
         sales_id = sales.id
         sales.delete()
         return Response({"message": f"Sales id: {sales_id} deleted"},status=status.HTTP_200_OK)
+
