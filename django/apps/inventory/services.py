@@ -11,40 +11,20 @@ from django.db.models import Count, Q, F, Sum
 class ProductService():
 
     @staticmethod
-    def save_product(
-        product: Product | None=None,
-        name: str | None=None, 
-        type: str |None=None,
-        shelf: Shelf | None=None,
-        expire_date:datetime | None=None,
-        unit_cost:Decimal | None=None,
-        selling_price:Decimal | None=None,
-        quantity:int | None=None,
-    ):
+    def save_product(product: Product | None=None, **kwargs):
+
+        # receive the raw kwargs package and filter out None value
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
         if product:
-            # constantly checking if blabla is not None, because a human might only update one field and leave the rest blank
-            product.name = name if name is not None else product.name
-            product.shelf = shelf if shelf is not None else product.shelf
-            product.type = type if type is not None else product.type
-            product.expire_date = expire_date if expire_date is not None else product.expire_date
-            product.unit_cost = unit_cost if unit_cost is not None else product.unit_cost
-            product.selling_price = selling_price if selling_price is not None else product.selling_price
-            product.quantity = quantity if quantity is not None else product.quantity
-
+            for key, value in clean_kwargs.items():   # Step 1: Loop through all valued fields from clean kwargs
+                setattr(product, key, value)          # Step 2: Assign the valued field directly to the object (product.field = value)
         else:
-            product = Product(
-                name=name,
-                shelf=shelf,
-                type=type,
-                expire_date=expire_date,
-                unit_cost=unit_cost,
-                selling_price=selling_price,
-                quantity=quantity,
-            )
+            product = Product(**clean_kwargs)
 
-        # No matter if it's new or an update, we recalculate 
-        if expire_date:
-            date_diff = expire_date - timezone.now()
+        # Logic to auto-create 'shelf_life' field
+        if product.expire_date:
+            date_diff = product.expire_date - timezone.now()
             product.shelf_life = date_diff.days
         else:
             product.shelf_life = 0
@@ -67,45 +47,33 @@ class ProductService():
 class ShelfService():
 
     @staticmethod
-    def save_shelf(
-        shelf: Shelf | None=None,
-        category: str | None=None,
-        max_shelf_capacity: int | None=None,
-        current_stock: int | None=None,
-    ):
+    def save_shelf(shelf: Shelf | None=None, **kwargs):
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
         if shelf:
-            shelf.category = category if category is not None else shelf.category
-            shelf.max_shelf_capacity = max_shelf_capacity if max_shelf_capacity is not None else shelf.max_shelf_capacity
-            shelf.current_stock = current_stock if current_stock is not None else shelf.current_stock
-
-            shelf.save()
-            return shelf
-
+            for key, value in clean_kwargs.items():      
+                setattr(shelf, key, value)         
         else:
-            return Shelf.objects.create(
-                category=category,
-                max_shelf_capacity=max_shelf_capacity,
-                current_stock=0 # Initiate stock by 0
-            )
+            shelf = Shelf(**clean_kwargs)
+
+        shelf.save()
+        return shelf
 
 
 class SalesService():
 
     @staticmethod
-    def save_sales(
-        product:Product,
-        quantity_sold:int,
-        shelf: Shelf,
-    ):
-        sales = Sales.objects.create(
-            product=product,
-            quantity_sold=quantity_sold,
-        )
+    def save_sales(**kwargs):
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-        if quantity_sold and product:
-            sales.total_revenue = quantity_sold * product.selling_price
+        # Instantiate in RAM, dont save directly by 'Sales.object.create'
+        sales = Sales(**clean_kwargs) 
+
+        # logic to auto-create 'total_revenue' field
+        if sales.quantity_sold and sales.product:
+            sales.total_revenue = sales.quantity_sold * sales.product.selling_price
         else:
             sales.total_revenue = Decimal("0")
             
-        sales.save()
+        sales.save() 
         return sales
