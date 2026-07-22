@@ -81,6 +81,15 @@ class ShelfService():
 
 
 class SalesService():
+    @staticmethod
+    def decrease_stock(sales: Sales): 
+        # auto-decrease quantity and currect stock when sales triggered
+        sales.product.quantity -= sales.quantity_sold
+        sales.product.shelf.current_stock -= sales.quantity_sold
+
+        sales.product.shelf.save()
+        sales.product.save()
+        return sales
 
     @staticmethod
     def save_sales(**kwargs):
@@ -94,6 +103,8 @@ class SalesService():
             sales.total_revenue = sales.quantity_sold * sales.product.selling_price
         else:
             sales.total_revenue = Decimal("0")
+
+        SalesService.decrease_stock(sales=sales)
             
         sales.save() 
         return sales
