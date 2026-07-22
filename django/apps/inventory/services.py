@@ -9,6 +9,24 @@ from django.db.models import Count, Q, F, Sum
 
 
 class ProductService():
+    @staticmethod
+    def increase_stock( #auto-increase currect stock when new product added/patched
+        shelf: Shelf,
+        product: Product,
+    ):
+        if product.id is None:
+            shelf.current_stock += product.quantity # add with whatever the quantity user put
+            shelf.save()
+            return shelf
+        
+        else:#if its indeed the product that user adding rn, find out how much the quantity previously, then decrease with the new 
+            if Product.objects.filter(id=product.id).exists(): 
+                existing_prod = Product.objects.get(id=product.id)
+                new_prod = product.quantity
+                shelf.current_stock += (new_prod - existing_prod.quantity) # access quantity of the exsting prod
+
+                shelf.save()
+                return shelf
 
     @staticmethod
     def save_product(product: Product | None=None, **kwargs):
@@ -28,6 +46,8 @@ class ProductService():
             product.shelf_life = date_diff.days
         else:
             product.shelf_life = 0
+
+        ProductService.increase_stock(shelf=product.shelf, product=product)
             
         product.save()
         return product
