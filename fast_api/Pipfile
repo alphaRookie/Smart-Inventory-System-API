@@ -9,6 +9,7 @@ uvicorn = "*"
 python-dotenv = "*"
 requests = "*"
 httpx = "*"
+ipykernel = "*"
 
 [dev-packages]
 
