@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from weather import get_local_weather, LocalWeather
 from pydantic import BaseModel
 from ml_engine import predict_demand
+from fastapi.concurrency import run_in_threadpool
 
 # Create the main FastAPI application instance
 app = FastAPI(title="Smart-Inventory-System")
@@ -38,6 +39,7 @@ class PredictionResponse(BaseModel):
     predicted_demand: int
     suggested_order: int
 
+
 # Endpoint for order suggestion
 @app.post("/api/predict", response_model=PredictionResponse)
 async def get_inventory_prediction(request_data: PredictionRequest):
@@ -47,7 +49,8 @@ async def get_inventory_prediction(request_data: PredictionRequest):
         raise HTTPException(status_code=500, detail="Failed to fetch forecast from OpenWeatherMap")
         
     # 2. Run AI calculation logic using tomorrow's temperature
-    prediction = predict_demand(
+    prediction = await run_in_threadpool(
+        predict_demand,
         base_demand=request_data.base_demand,
         product_type=request_data.product_type,
         temperature=weather_info.temperature
@@ -62,6 +65,3 @@ async def get_inventory_prediction(request_data: PredictionRequest):
         predicted_demand=prediction,
         suggested_order=max(0, suggestion)  # Don't suggest negative order counts
     )
-
-
- 
