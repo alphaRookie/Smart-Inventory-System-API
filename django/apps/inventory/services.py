@@ -108,3 +108,48 @@ class SalesService():
             
         sales.save() 
         return sales
+
+
+class OrderPredictionService():
+    @staticmethod
+    def fetch_ai_prediction(product:Product, shelf:Shelf):
+        """ Sends product data to FastAPI and returns the prediction numbers. """
+
+        # FastAPI URL endpoint
+        url = "http://127.0.0.1:8001/api/predict"
+
+        # find out how many product is sold based on each different types in the last 3 days
+        demand = Sales.objects \
+            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
+            .aggregate(base_demand=Coalesce(Sum("quantity_sold"), 0))
+
+        # Request data to be sent to Fast api
+        payload = {
+            "product_name": product.name,
+            "product_type": product.type,
+            "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
+            "current_stock": int(shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
+        }
+        
+        try:
+            # send the payload data to target URL to be processed within 5 seconds
+            response = requests.post(url, json=payload, timeout=5) 
+            
+            if response.status_code == 200:
+                # 1.save to DB
+                prediction_obj=OrderPrediction.objects.create( # Convert raw JSON text into db rows directly
+                    product=product,
+                    demand_prediction=response.json()["predicted_demand"],
+                    order_suggestion=response.json()["suggested_order"],
+                    target_timing=timezone.now() + timedelta(days=3)
+                )
+
+                # 2.Return a dictionary so ai_data.get() can works in views
+                return {
+                    "predicted_demand": prediction_obj.demand_prediction,
+                    "suggested_order": prediction_obj.order_suggestion
+                }
+            return None
+        
+        except requests.exceptions.RequestException:
+            return None
