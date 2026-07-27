@@ -10,4 +10,10 @@ urlpatterns = [
     
     path("/shelf", views.ShelfAPIView.as_view(), name="list-shelf"),
     path("/shelf/<int:pk>", views.ShelfItemAPIView.as_view(), name="detail-shelf"),
+
+    path("/predictions", views.OrderPredictionAPIView.as_view(), name="list-all-prediction"),
+    path("/predictions/<int:pk>", views.OrderPredictionItemAPIView.as_view(), name="detail-prediction"),
+
+    # endpoint to run the whole prediction process
+    path("/predict/<int:product_id>", views.get_prediction_dashboard, name="prediction-process"), 
 ]
