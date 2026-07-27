@@ -139,3 +139,50 @@ class SalesItemAPIView(APIView):
         sales.delete()
         return Response({"message": f"Sales id: {sales_id} deleted"},status=status.HTTP_200_OK)
 
+
+
+class OrderPredictionAPIView(APIView):
+
+    def get(self, request):
+        order_prediction = OrderPrediction.objects.all() 
+        serializer = OrderPredictionSerializer(order_prediction, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+class OrderPredictionItemAPIView(APIView):
+
+    def get(self, request, pk):
+        order_prediction = get_object_or_404(OrderPrediction, pk=pk) 
+        serializer = OrderPredictionSerializer(order_prediction) 
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        order_prediction = get_object_or_404(OrderPrediction, pk=pk)
+        order_prediction.delete()
+        return Response({"message": f"OrderPrediction data deleted"},status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def get_prediction_dashboard(request, product_id):
+    """
+    View that triggers the AI prediction for a specific product and displays it on the dashboard.
+    """
+    product = get_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
+    shelf = get_object_or_404(Shelf, product=product) # once we found that product, find which spesific shelf that carry this product
+    
+    ai_data = OrderPredictionService.fetch_ai_prediction(
+        product=product,
+        shelf=shelf
+    )
+    
+    if not ai_data:
+        return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    return Response({ # Return JSON result to the dashboard
+        "product_id": product.id,
+        "product_name": product.name,
+        "product_type": product.type,
+        "predicted_demand": ai_data.get("predicted_demand"),
+        "suggested_order": ai_data.get("suggested_order")
+    }, status=status.HTTP_200_OK)
+
