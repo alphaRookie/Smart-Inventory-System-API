@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Q, F, Sum
+import httpx
 
 
 class ProductService():
@@ -112,16 +113,16 @@ class SalesService():
 
 class OrderPredictionService():
     @staticmethod
-    def fetch_ai_prediction(product:Product, shelf:Shelf):
+    async def fetch_ai_prediction(product:Product, shelf:Shelf):
         """ Sends product data to FastAPI and returns the prediction numbers. """
 
         # FastAPI URL endpoint
         url = "http://127.0.0.1:8001/api/predict"
 
         # find out how many product is sold based on each different types in the last 3 days
-        demand = Sales.objects \
+        demand = await Sales.objects \
             .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
-            .aggregate(base_demand=Coalesce(Sum("quantity_sold"), 0))
+            .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
         # Request data to be sent to Fast api
         payload = {
@@ -132,12 +133,12 @@ class OrderPredictionService():
         }
         
         try:
-            # send the payload data to target URL to be processed within 5 seconds
-            response = requests.post(url, json=payload, timeout=5) 
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
             
             if response.status_code == 200:
-                # 1.save to DB
-                prediction_obj=OrderPrediction.objects.create( # Convert raw JSON text into db rows directly
+                # 1.save to DB (Convert raw JSON text into db rows directly)
+                prediction_obj = await OrderPrediction.objects.acreate( # use async create method (acreate)
                     product=product,
                     demand_prediction=response.json()["predicted_demand"],
                     order_suggestion=response.json()["suggested_order"],
