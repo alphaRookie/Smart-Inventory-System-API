@@ -8,6 +8,7 @@ django = "*"
 djangorestframework = "*"
 requests = "*"
 psycopg2-binary = "*"
+httpx = "*"
 
 [dev-packages]
 
