@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, aget_object_or_404
 from typing import cast
 
 from .models import Product, Shelf, Sales, OrderPrediction
@@ -163,14 +163,14 @@ class OrderPredictionItemAPIView(APIView):
 
 
 @api_view(['POST'])
-def get_prediction_dashboard(request, product_id):
+async def get_prediction_dashboard(request, product_id):
     """
     View that triggers the AI prediction for a specific product and displays it on the dashboard.
     """
-    product = get_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
-    shelf = get_object_or_404(Shelf, product=product) # once we found that product, find which spesific shelf that carry this product
+    product = await aget_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
+    shelf = await aget_object_or_404(Shelf, product=product) # once we found that product, find which spesific shelf that carry this product
     
-    ai_data = OrderPredictionService.fetch_ai_prediction(
+    ai_data = await OrderPredictionService.fetch_ai_prediction(
         product=product,
         shelf=shelf
     )
@@ -182,7 +182,7 @@ def get_prediction_dashboard(request, product_id):
         "product_id": product.id,
         "product_name": product.name,
         "product_type": product.type,
-        "predicted_demand": ai_data.get("predicted_demand"),
+        "predicted_demand": ai_data.get("predicted_demand"), # dont use 'aget' on ai_data because this just a regular Python dict sitting in memory
         "suggested_order": ai_data.get("suggested_order")
     }, status=status.HTTP_200_OK)
 
