@@ -101,6 +101,9 @@ class ShelfService():
     def save_shelf(shelf: Shelf | None=None, **kwargs):
         clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
+        if shelf and shelf.max_shelf_capacity < shelf.current_stock:
+            raise ValidationError(f"Cannot change the max capacity to be lower than current stock ({shelf.current_stock})")
+
         if shelf:
             for key, value in clean_kwargs.items():      
                 setattr(shelf, key, value)         
