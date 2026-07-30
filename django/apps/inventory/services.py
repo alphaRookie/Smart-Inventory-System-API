@@ -35,6 +35,36 @@ class ProductService():
         # receive the raw kwargs package and filter out None value
         clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
+        # Validation 1
+        target_shelf = clean_kwargs.get("shelf") or (product.shelf if product else None) # take user input or take from DB(if user didnt input when patching)
+        quantity = clean_kwargs.get("quantity") or (product.quantity if product else None)
+        if target_shelf and quantity:
+            available_space = target_shelf.max_shelf_capacity - target_shelf.current_stock
+
+            if quantity > available_space:
+                raise ValidationError(f"Cannot fit {quantity} units on this shelf, Only {available_space} space remaining.")
+
+        # Validation 2
+        selling_price = clean_kwargs.get("selling_price") or (product.selling_price if product else None)
+        unit_cost = clean_kwargs.get("unit_cost") or (product.unit_cost if product else None)
+        if selling_price and unit_cost:
+            if selling_price < unit_cost:
+                raise ValidationError("Selling price cannot be lower than unit cost (negative profit margin)")
+            
+        # Validation 3
+        expire_date = clean_kwargs.get("expire_date") or (product.expire_date if product else None)
+        if expire_date and expire_date <= timezone.now():
+            raise ValidationError("Cannot add or update product with an expiration date in the past")
+        
+        # Validation 4
+        name = clean_kwargs.get("name") or (product.name if product else None)
+        existing_name = Product.objects.filter(name__iexact=name, shelf=target_shelf) #Case-insensitive check
+        if product: # Only exclude if product actually exists btw
+            existing_name = existing_name.exclude(id=product.id) # "Look for other products with this name, but ignore the product I am currently editing"
+        if existing_name.exists():
+            raise ValidationError(f"A product named '{name}' already exists on this shelf")
+
+
         if product:
             for key, value in clean_kwargs.items():   # Step 1: Loop through all valued fields from clean kwargs
                 setattr(product, key, value)          # Step 2: Assign the valued field directly to the object (product.field = value)
