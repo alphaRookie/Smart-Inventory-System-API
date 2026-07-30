@@ -129,6 +129,18 @@ class SalesService():
     def save_sales(**kwargs):
         clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
+        product = clean_kwargs.get("product") 
+        quantity_sold = clean_kwargs.get("quantity_sold", 0)
+
+        if quantity_sold <= 0:
+            raise ValidationError("Quantity sold must be greater than zero.")
+
+        if product and quantity_sold > product.shelf.current_stock:
+            raise ValidationError(f"Not enough stock available. Remaining stock: {product.shelf.current_stock}")
+        
+        if product and product.expire_date <= timezone.now():
+            raise ValidationError("Cannot sell expired products.")
+
         # Instantiate in RAM, dont save directly by 'Sales.object.create'
         sales = Sales(**clean_kwargs) 
 
