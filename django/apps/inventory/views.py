@@ -5,6 +5,11 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404, aget_object_or_404
 from typing import cast
 
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+
 from .models import Product, Shelf, Sales, OrderPrediction
 from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer
 from .services import ProductService, ShelfService, SalesService, OrderPredictionService
@@ -52,7 +57,7 @@ class ProductItemAPIView(APIView):
 
     def delete(self, request, pk):
         product = get_object_or_404(Product, pk=pk) 
-        shelf = get_object_or_404(Shelf, product=product) 
+        shelf = product.shelf
         ProductService.delete_product(product=product, shelf=shelf)
         return Response({"message": f"{product.name} deleted"},status=status.HTTP_200_OK)
 
@@ -162,27 +167,31 @@ class OrderPredictionItemAPIView(APIView):
         return Response({"message": f"OrderPrediction data deleted"},status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-async def get_prediction_dashboard(request, product_id):
-    """
-    View that triggers the AI prediction for a specific product and displays it on the dashboard.
-    """
-    product = await aget_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
-    shelf = await aget_object_or_404(Shelf, product=product) # once we found that product, find which spesific shelf that carry this product
-    
-    ai_data = await OrderPredictionService.fetch_ai_prediction(
-        product=product,
-        shelf=shelf
-    )
-    
-    if not ai_data:
-        return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+# Because DRF is external package, its core source code is already written as synchronous code (def)
+# so i bypass DRF using native Django's View and JsonResponse instead
+@method_decorator(csrf_exempt, name="dispatch")
+class OrderPredictionView(View):
 
-    return Response({ # Return JSON result to the dashboard
-        "product_id": product.id,
-        "product_name": product.name,
-        "product_type": product.type,
-        "predicted_demand": ai_data.get("predicted_demand"), # dont use 'aget' on ai_data because this just a regular Python dict sitting in memory
-        "suggested_order": ai_data.get("suggested_order")
-    }, status=status.HTTP_200_OK)
+    async def post(self, request, product_id):
+        """
+        View that triggers the AI prediction for a specific product and displays it on the dashboard.
+        """
+        product = await aget_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
+        shelf = product.shelf # once we found that product, find which spesific shelf that carry this product
+        
+        ai_data = await OrderPredictionService.fetch_ai_prediction(
+            product=product,
+            shelf=shelf
+        )
+        
+        if not ai_data:
+            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        return JsonResponse({ # Return JSON result to the dashboard
+            "product_id": product.id,
+            "product_name": product.name,
+            "product_type": product.type,
+            "predicted_demand": ai_data.get("predicted_demand"), # dont use 'aget' on ai_data because this just a regular Python dict sitting in memory
+            "suggested_order": ai_data.get("suggested_order")
+        }, status=status.HTTP_200_OK)
 
