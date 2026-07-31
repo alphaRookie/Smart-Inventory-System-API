@@ -15,5 +15,5 @@ urlpatterns = [
     path("/predictions/<int:pk>", views.OrderPredictionItemAPIView.as_view(), name="detail-prediction"),
 
     # endpoint to run the whole prediction process
-    path("/predict/<int:product_id>", views.get_prediction_dashboard, name="prediction-process"), 
+    path("/predict/<int:product_id>", views.OrderPredictionView.as_view(), name="prediction-process"), 
 ]
