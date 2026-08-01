@@ -10,6 +10,9 @@ python-dotenv = "*"
 requests = "*"
 httpx = "*"
 ipykernel = "*"
+pandas = "*"
+scikit-learn = "*"
+joblib = "*"
 
 [dev-packages]
 
