@@ -20,3 +20,6 @@ staticfiles/
 
 # hide workspace
 *.code-workspace
+
+# Ignore trained machine learning model files
+*.joblib
