@@ -3,8 +3,8 @@
 from fastapi import FastAPI, HTTPException
 from weather import get_local_weather, LocalWeather
 from pydantic import BaseModel
-from ml_engine import predict_demand
 from fastapi.concurrency import run_in_threadpool
+import joblib
 
 # Create the main FastAPI application instance
 app = FastAPI(title="Smart-Inventory-System")
@@ -39,6 +39,8 @@ class PredictionResponse(BaseModel):
     predicted_demand: int
     suggested_order: int
 
+#load model
+model = joblib.load("../ml_model/weather_model.joblib")
 
 # Endpoint for order suggestion
 @app.post("/api/predict", response_model=PredictionResponse)
@@ -48,20 +50,32 @@ async def get_inventory_prediction(request_data: PredictionRequest):
     if not weather_info:
         raise HTTPException(status_code=500, detail="Failed to fetch forecast from OpenWeatherMap")
         
-    # 2. Run AI calculation logic using tomorrow's temperature
-    prediction = await run_in_threadpool(
-        predict_demand,
-        base_demand=request_data.base_demand,
-        product_type=request_data.product_type,
-        temperature=weather_info.temperature
-    )
-    
-    # 3. Calculate suggested order (Demand minus what we already have on shelves)
-    suggestion = prediction - request_data.current_stock
-    
-    # 4. Return everything back to Django cleanly
+    # 2. Format product_type string into binary values (0 or 1) for the model
+    cold_boost = 1 if request_data.product_type == "COLD_BOOST" else 0
+    heat_boost = 1 if request_data.product_type == "HEAT_BOOST" else 0
+    weather_neutral = 1 if request_data.product_type == "WEATHER_NEUTRAL" else 0
+
+    # Match the column sequence used in .csv file
+    features = [
+        [
+            request_data.base_demand,
+            weather_info.temperature,
+            cold_boost,
+            heat_boost,
+            weather_neutral,
+        ]
+    ]
+
+    # 3. takes these 5 inputs (features), runs them through the tree model, and outputs a calculated number 
+    # this part replace running manual if/else logic i had before
+    prediction = await run_in_threadpool(model.predict, features)
+    predicted_demand = max(0, int(prediction[0])) #catch the output
+
+    # 4. Calculate suggested order count
+    suggestion = max(0, predicted_demand - request_data.current_stock) # Don't suggest negative order counts(The suggestion only triggers when stock drops below the predicted demand)
+
     return PredictionResponse(
         product_name=request_data.product_name,
-        predicted_demand=prediction,
-        suggested_order=max(0, suggestion)  # Don't suggest negative order counts
+        predicted_demand=predicted_demand,
+        suggested_order=suggestion,
     )
