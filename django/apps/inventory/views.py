@@ -170,16 +170,14 @@ class OrderPredictionItemAPIView(APIView):
 # Because DRF is external package, its core source code is already written as synchronous code (def)
 # so i bypass DRF using native Django's View and JsonResponse instead
 @method_decorator(csrf_exempt, name="dispatch")
-class OrderPredictionView(View):
+class SingleOrderPredictionView(View):
+    """ View that triggers the AI prediction for a specific product and displays it on the dashboard """
 
     async def post(self, request, product_id):
-        """
-        View that triggers the AI prediction for a specific product and displays it on the dashboard.
-        """
         product = await aget_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
         shelf = product.shelf # once we found that product, find which spesific shelf that carry this product
         
-        ai_data = await OrderPredictionService.fetch_ai_prediction(
+        ai_data = await OrderPredictionService.fetch_single_prediction(
             product=product,
             shelf=shelf
         )
@@ -195,3 +193,19 @@ class OrderPredictionView(View):
             "suggested_order": ai_data.get("suggested_order")
         }, status=status.HTTP_200_OK)
 
+
+@method_decorator(csrf_exempt, name="dispatch")
+class BatchOrderPredictionView(View):
+    """ Optional action to manually triggers the AI prediction for all products (by default this automatically run by celery) """
+
+    async def post(self, request):
+        ai_data = await OrderPredictionService.fetch_batch_prediction()
+
+        if not ai_data:
+            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+       
+        return JsonResponse({
+            "message": "Batch predictions successfully done",
+            "total_processed": len(ai_data), # Return the count of items
+            "predictions": ai_data  # List of prediction results
+        }, status=status.HTTP_200_OK)
