@@ -172,14 +172,14 @@ class OrderPredictionService():
 
         # Request data to be sent to Fast api
         payload = {
-            "product_name": product.name,
+            "product_id": product.id,
             "product_type": product.type,
             "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
             "current_stock": int(shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
         }
         
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient() as client: # 1 call = 1 connection setup per product
                 response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
             
             if response.status_code == 200:
@@ -207,49 +207,48 @@ class OrderPredictionService():
         """ Sends all products data to FastAPI and returns the prediction numbers. """
 
         # FastAPI URL endpoint
-        url = "http://127.0.0.1:8001/api/predict-bulk"
+        url = "http://127.0.0.1:8001/api/predict-batch"
 
-        # 1. Create an empty list to hold prediction objects in RAM
-        predictions_to_create = []
+        payload = [] # hold 'list' of data to be sent out to Fast Api
 
         products = Product.objects.filter(is_deleted=False).select_related("shelf")
+        async for product in products:
+            # find out how many product is sold based on each different types in the last 3 days
+            demand = await Sales.objects \
+                .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
+                .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
-        async with httpx.AsyncClient() as client:
-            async for product in products:
-                # find out how many product is sold based on each different types in the last 3 days
-                demand = await Sales.objects \
-                    .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
-                    .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
+            # Request data to be sent to Fast api
+            payload.append({
+                "product_id": product.id,
+                "product_type": product.type,
+                "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
+                "current_stock": int(product.shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
+            })
+            
+        try: #safely catch any error happened inside try block
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
+            
+            if response.status_code == 200:
+                new_records = [
+                    OrderPrediction( 
+                        product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
+                        demand_prediction = item["predicted_demand"], 
+                        order_suggestion = item["suggested_order"],
+                        target_timing = timezone.now() + timedelta(days=3)
+                    )
+                    # LOOP COMPREHENSIVE. It loops through all prediction dict returned by FastAPI
+                    for item in response.json() 
+                ]
 
-                # Request data to be sent to Fast api
-                payload = {
-                    "product_id": product.id,
-                    "product_name": product.name,
-                    "product_type": product.type,
-                    "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
-                    "current_stock": int(product.shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
-                }
-                
-                try:
-                    response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
-                    
-                    if response.status_code == 200:
-                        # DONT save to DB yet! Just build the object in RAM
-                        predictions_to_create.append(
-                            OrderPrediction( 
-                                product=product,
-                                demand_prediction=response.json()["predicted_demand"],
-                                order_suggestion=response.json()["suggested_order"],
-                                target_timing=timezone.now() + timedelta(days=3)
-                            )
-                        )
-                
-                except httpx.HTTPError:
-                    continue # If FastAPI fails for a product, it does not stop the whole process. continue skips that failed Product and moves to another Prod (so the rest of your inventory still gets updated)
+                # Saves all items into PostgreSQL in 1 single SQL query
+                await OrderPrediction.objects.abulk_create(new_records)
+                return {"total_processed": len(new_records)}
 
-        # Saves all items into PostgreSQL in 1 single SQL query
-        if predictions_to_create:
-            await OrderPrediction.objects.abulk_create(predictions_to_create)
+            return {"total_processed": 0, "error": f"FastAPI error: {response.status_code}"}
+        
+        except httpx.HTTPError:
+            return {"total_processed": 0, "error": "Connection failed"}
 
-        return {"total_processed": len(predictions_to_create)}
 
