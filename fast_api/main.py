@@ -28,23 +28,24 @@ async def fetch_tomorrow_weather():
 
 # This is the request data template that Django must send to FastAPI
 class PredictionRequest(BaseModel):
-    product_name: str
+    product_id: int
     product_type: str
     base_demand: int
     current_stock: int
 
 # This is what FastAPI will give back to Django
 class PredictionResponse(BaseModel):
-    product_name: str
+    product_id: int
     predicted_demand: int
     suggested_order: int
 
 #load model
 model = joblib.load("../ml_model/weather_model.joblib")
 
-# Endpoint for order suggestion
-@app.post("/api/predict", response_model=PredictionResponse)
-async def get_inventory_prediction(request_data: PredictionRequest):
+
+# Single prediction Endpoint
+@app.post("/api/predict-single", response_model=PredictionResponse) # Assigns a spesific value to parameter
+async def get_inventory_prediction(request_data: PredictionRequest): # tells FastAPI what type a variable should be
     # 1. Fetch tomorrow's weather automatically
     weather_info = await get_local_weather() 
     if not weather_info:
@@ -75,7 +76,51 @@ async def get_inventory_prediction(request_data: PredictionRequest):
     suggestion = max(0, predicted_demand - request_data.current_stock) # Don't suggest negative order counts(The suggestion only triggers when stock drops below the predicted demand)
 
     return PredictionResponse(
-        product_name=request_data.product_name,
+        product_id=request_data.product_id,
         predicted_demand=predicted_demand,
         suggested_order=suggestion,
     )
+
+
+# Bulk prediction Endpoint using List[...]
+@app.post("/api/predict-batch", response_model=list[PredictionResponse])
+async def get_bulk_inventory_predictions(request_data: list[PredictionRequest]):
+    
+    # 1. Fetch weather once for the whole batch
+    weather_info = await get_local_weather()
+    if not weather_info:
+        raise HTTPException(status_code=500, detail="Failed to fetch forecast from OpenWeatherMap")
+
+    results = []
+
+    # 2. Loop through every item in the incoming list
+    for item in request_data:
+        cold_boost = 1 if item.product_type == "COLD_BOOST" else 0
+        heat_boost = 1 if item.product_type == "HEAT_BOOST" else 0
+        weather_neutral = 1 if item.product_type == "WEATHER_NEUTRAL" else 0
+
+        features = [
+            [
+                item.base_demand,
+                weather_info.temperature,
+                cold_boost,
+                heat_boost,
+                weather_neutral,
+            ]
+        ]
+
+        prediction = await run_in_threadpool(model.predict, features)
+        predicted_demand = max(0, int(prediction[0]))
+        suggestion = max(0, predicted_demand - item.current_stock) #each item
+
+        # Build each response using the existing PredictionResponse class
+        results.append(
+            PredictionResponse(
+                product_id=item.product_id,
+                predicted_demand=predicted_demand,
+                suggested_order=suggestion,
+            )
+        )
+
+    # 3. returns a JSON array [...] matching List[PredictionResponse]
+    return results
