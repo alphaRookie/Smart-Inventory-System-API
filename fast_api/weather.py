@@ -38,6 +38,7 @@ async def get_local_weather():
                 humidity = int(main_data.get('humidity', 0)),
                 condition = weather_data.get('main', 'Clear')
             )
-        except Exception:
+        except Exception as e:
+            print(f"Error fetching weather: {e}") # exception catches all error, so we need to know what error is that
             return None
 
