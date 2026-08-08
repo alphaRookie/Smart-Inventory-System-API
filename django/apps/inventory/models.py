@@ -60,3 +60,18 @@ class OrderPrediction(models.Model):
 
     def __str__(self):
         return f"Order prediction for: {self.product.name}"
+
+
+class SpoilageNotification(models.Model):
+    class Level(models.TextChoices):
+        WARNING = "WARNING", _("Warning")
+        DANGER = "DANGER", _("Danger")
+    id:int
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    message = models.TextField()
+    level = models.CharField(max_length=10, choices=Level.choices, default=Level.WARNING)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Notification for {self.product.name}: {self.level}"
