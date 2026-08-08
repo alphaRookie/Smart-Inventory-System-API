@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from .models import Product, Sales, Shelf, OrderPrediction
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification
 
 
 class ProductSerializer(serializers.ModelSerializer): 
@@ -26,3 +26,9 @@ class OrderPredictionSerializer(serializers.ModelSerializer):
         model = OrderPrediction
         fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing"]
         read_only_fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing"] # put all bcoz AI who inputs it, not user
+
+class SpoilageNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpoilageNotification
+        fields = ["id", "product", "message", "level", "is_read", "created_at"]
+        read_only_fields = ["id", "created_at"]
