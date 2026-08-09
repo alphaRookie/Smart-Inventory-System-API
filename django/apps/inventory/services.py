@@ -1,5 +1,5 @@
 import requests
-from .models import Product, Sales, Shelf, OrderPrediction, Notification
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification
 from datetime import timedelta, date, datetime
 from decimal import Decimal
 from django.utils import timezone
@@ -218,7 +218,7 @@ class OrderPredictionService():
                 .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
                 .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
-            # Request data to be sent to Fast api
+            # Request data to be sent to Fast api (Stored in Dictionary)
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type,
@@ -232,7 +232,7 @@ class OrderPredictionService():
             
             if response.status_code == 200:
                 new_records = [
-                    OrderPrediction( 
+                    OrderPrediction( # Stored in Model Instance
                         product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
                         demand_prediction = item["predicted_demand"], 
                         order_suggestion = item["suggested_order"],
@@ -251,4 +251,63 @@ class OrderPredictionService():
         except httpx.HTTPError:
             return {"total_processed": 0, "error": "Connection failed"}
 
+
+
+class SpoilageNotificationService():
+    @staticmethod
+    async def check_spoilage():
+        almost_expired_prod = Product.objects.filter( # no need await
+            shelf_life__lt = 14, # 14 days
+            is_deleted = False
+        ).select_related("shelf") #join shelf table
+
+        notifications_count = 0
+        notif_list = []
+        show_result = []
+
+        # loop through each expiring product
+        async for prod in almost_expired_prod:
+            # each leftover stock of these expiring prod
+            stock_left = prod.shelf.current_stock 
+
+            # fetch latest prediction for this prod (as prediction can be multiple)
+            prediction = await OrderPrediction.objects.filter(product=prod).afirst()
+            predicted_demand = prediction.demand_prediction if prediction else 0
+
+            spoilage_risk = stock_left - predicted_demand
+            
+            if spoilage_risk <= 0:
+                continue # Stock will be sold out before expired (No alert needed) 
+            else:
+                # Spoilage risk detected!
+                already_notified = await SpoilageNotification.objects.filter( # Check if an unread notification already exists for this product
+                    product=prod, 
+                    is_read=False
+                ).aexists()
+
+                if not already_notified:
+                    notif_list.append(
+                        SpoilageNotification( # Stored in Model Instance, not dict
+                            product = prod,
+                            level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
+                            message = (
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}"
+                                f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
+                            )
+                        )
+                    )
+                    notifications_count += 1
+
+                    show_result.append({ # indent to this level so it only run when there new spoilage fouund
+                        "product_id": prod.id,
+                        "product_name": prod.name,
+                        "spoilage_risk": spoilage_risk,
+                        "level": SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
+                    })
+
+        await SpoilageNotification.objects.abulk_create(notif_list)
+        return {
+            "notif_count": f"Spoilage check completed. {notifications_count} new alerts created.",
+            "result": show_result if notifications_count>0 else "No new potential spoilage found, please check inbox to see previous notifications created."
+        }
 
