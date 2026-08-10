@@ -10,9 +10,9 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 
-from .models import Product, Shelf, Sales, OrderPrediction
-from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer
-from .services import ProductService, ShelfService, SalesService, OrderPredictionService
+from .models import Product, Shelf, Sales, OrderPrediction, SpoilageNotification
+from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageNotificationSerializer
+from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageNotificationService
 
 
 class ProductAPIView(APIView):
@@ -56,8 +56,8 @@ class ProductItemAPIView(APIView):
         }, status=status.HTTP_200_OK) 
 
     def delete(self, request, pk):
-        product = get_object_or_404(Product, pk=pk) 
-        shelf = product.shelf
+        product = get_object_or_404(Product, pk=pk) # ambil spesific product based on id referring to URL yg diketik
+        shelf = product.shelf  # once we found that product, find which spesific shelf that carry this product
         ProductService.delete_product(product=product, shelf=shelf)
         return Response({"message": f"{product.name} deleted"},status=status.HTTP_200_OK)
 
@@ -174,13 +174,13 @@ class SingleOrderPredictionView(View):
     """ View that triggers the AI prediction for a specific product and displays it on the dashboard """
 
     async def post(self, request, product_id):
-        product = await aget_object_or_404(Product, id=product_id) # ambil spesific product based on id referring to URL yg diketik
-        shelf = product.shelf # once we found that product, find which spesific shelf that carry this product
+        product = await aget_object_or_404(
+            Product.objects.select_related("shelf"), # during fetching Product, fetch the Shelf and join it at same time
+            id=product_id
+        ) 
+        shelf = product.shelf
         
-        ai_data = await OrderPredictionService.fetch_single_prediction(
-            product=product,
-            shelf=shelf
-        )
+        ai_data = await OrderPredictionService.fetch_single_prediction(product=product, shelf=shelf)
         
         if not ai_data:
             return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -206,6 +206,44 @@ class BatchOrderPredictionView(View):
        
         return JsonResponse({
             "message": "Batch predictions successfully done",
-            "total_processed": len(ai_data), # Return the count of items
-            "predictions": ai_data  # List of prediction results
+            "total_processed": ai_data.get("total_processed"), 
         }, status=status.HTTP_200_OK)
+
+
+
+class SpoilageNotificationAPIView(APIView):
+
+    def get(self, request):
+        spoilage_notif = SpoilageNotification.objects.all() 
+        serializer = SpoilageNotificationSerializer(spoilage_notif, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+class SpoilageNotificationItemAPIView(APIView):
+
+    def get(self, request, pk):
+        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk) 
+        serializer = SpoilageNotificationSerializer(spoilage_notif) 
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk)
+        spoilage_notif.delete()
+        return Response({"message": "Notification message deleted"},status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class SpoilageCheckView(View):
+    """ Optional action to manually triggers spoilage check (by default this automatically run by celery) """
+
+    async def post(self, request):
+        ai_data = await SpoilageNotificationService.check_spoilage()
+
+        if not ai_data:
+            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+       
+        return JsonResponse({
+            "message": ai_data.get("notif_count"), 
+            "predictions": ai_data.get("result")  # List prediction results if found the new, otherwise show text (service)
+        }, status=status.HTTP_200_OK) 
+    
