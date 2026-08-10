@@ -17,4 +17,8 @@ urlpatterns = [
     # endpoint to run the whole prediction process
     path("/predict/<int:product_id>", views.SingleOrderPredictionView.as_view(), name="single-prediction-process"), 
     path("/predict-batch", views.BatchOrderPredictionView.as_view(), name="batch-prediction-process"), 
+
+    path("/spoilage-check", views.SpoilageCheckView.as_view(), name="spoilage-check"),
+    path("/spoilage-notif", views.SpoilageNotificationAPIView.as_view(), name="spoilage-check"),
+    path("/spoilage-notif/<int:pk>", views.SpoilageNotificationItemAPIView.as_view(), name="spoilage-check-detail")
 ]
