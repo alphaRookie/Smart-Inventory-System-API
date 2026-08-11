@@ -71,13 +71,6 @@ class ProductService():
         else:
             product = Product(**clean_kwargs)
 
-        # Logic to auto-create 'shelf_life' field
-        if product.expire_date:
-            date_diff = product.expire_date - timezone.now()
-            product.shelf_life = date_diff.days
-        else:
-            product.shelf_life = 0
-
         ProductService.increase_stock(shelf=product.shelf, product=product)
             
         product.save()
@@ -257,7 +250,7 @@ class SpoilageNotificationService():
     @staticmethod
     async def check_spoilage():
         almost_expired_prod = Product.objects.filter( # no need await
-            shelf_life__lt = 14, # 14 days
+            expire_date__lt = timezone.now() + timedelta(days=14), # 14 days
             is_deleted = False
         ).select_related("shelf") #join shelf table
 
