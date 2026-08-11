@@ -43,9 +43,16 @@ class Product(models.Model):
         """ Calculates remaining shelf life dynamically based on the current date (Returns 7 today, 6 tomorrow, 5 the day after, and stops at 0). """
         if self.expire_date:
             date_diff = self.expire_date - timezone.now()
-            return max(date_diff.days, 0) # "take the calculated days, but limit it at a minimum of 0
-        return 0 # if expire_date not exist return 0
+            return max(date_diff.days, 0) # "take the calculated days, but limit it at a minimum of 0"
+        return 0 
 
+    # 'is_expire' auto trigger when expire_date passes. while 'is_deleted' is manually Human click "Delete" (must record that explicit action)
+    @property
+    def is_expired(self):
+        """ When product hits 0 shelf life, automatically marks it """
+        if self.shelf_life == 0:
+            return True
+        return False
 
 
 class Sales(models.Model):
