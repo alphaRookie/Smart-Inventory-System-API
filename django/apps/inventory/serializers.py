@@ -6,8 +6,8 @@ from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification
 class ProductSerializer(serializers.ModelSerializer): 
     class Meta: 
         model = Product
-        fields = ["id", "name", "shelf", "expire_date", "shelf_life", "quantity", "unit_cost", "type", "selling_price", "is_deleted"]
-        read_only_fields = ["id", "shelf_life"]
+        fields = ["id", "name", "shelf", "expire_date", "shelf_life", "quantity", "unit_cost", "type", "selling_price", "is_deleted", "is_expired"]
+        read_only_fields = ["id", "shelf_life", "is_expired"]
 
 class SalesSerializer(serializers.ModelSerializer): 
     class Meta: 
