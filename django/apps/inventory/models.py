@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _ 
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
+from django.utils import timezone
 
 
 class Shelf(models.Model):
@@ -29,7 +30,6 @@ class Product(models.Model):
     shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
     type = models.CharField(max_length=50, choices=WeatherBehavior.choices)
     expire_date = models.DateTimeField(db_index=True)
-    shelf_life = models.PositiveIntegerField(editable=False) # autofill from service.py
     quantity = models.PositiveIntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
     selling_price = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
@@ -37,6 +37,15 @@ class Product(models.Model):
     
     def __str__(self):
         return self.name
+
+    @property
+    def shelf_life(self):
+        """ Calculates remaining shelf life dynamically based on the current date (Returns 7 today, 6 tomorrow, 5 the day after, and stops at 0). """
+        if self.expire_date:
+            date_diff = self.expire_date - timezone.now()
+            return max(date_diff.days, 0) # "take the calculated days, but limit it at a minimum of 0
+        return 0 # if expire_date not exist return 0
+
 
 
 class Sales(models.Model):
