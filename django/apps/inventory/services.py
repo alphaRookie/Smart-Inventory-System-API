@@ -53,7 +53,7 @@ class ProductService():
             
         # Validation 3
         expire_date = clean_kwargs.get("expire_date") or (product.expire_date if product else None)
-        if expire_date and expire_date <= timezone.now():
+        if expire_date and expire_date <= timezone.localdate():
             raise ValidationError("Cannot add or update product with an expiration date in the past")
         
         # Validation 4
@@ -131,7 +131,7 @@ class SalesService():
         if product and quantity_sold > product.shelf.current_stock:
             raise ValidationError(f"Not enough stock available. Remaining stock: {product.shelf.current_stock}")
         
-        if product and product.expire_date <= timezone.now():
+        if product and product.expire_date <= timezone.localdate():
             raise ValidationError("Cannot sell expired products.")
 
         # Instantiate in RAM, dont save directly by 'Sales.object.create'
@@ -181,7 +181,7 @@ class OrderPredictionService():
                     product=product,
                     demand_prediction=response.json()["predicted_demand"],
                     order_suggestion=response.json()["suggested_order"],
-                    target_timing=timezone.now() + timedelta(days=3)
+                    target_timing=timezone.localdate() + timedelta(days=3)
                 )
 
                 # 2.Return a dictionary so ai_data.get() can works in views
@@ -229,7 +229,7 @@ class OrderPredictionService():
                         product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
                         demand_prediction = item["predicted_demand"], 
                         order_suggestion = item["suggested_order"],
-                        target_timing = timezone.now() + timedelta(days=3)
+                        target_timing = timezone.localdate() + timedelta(days=3)
                     )
                     # LOOP COMPREHENSIVE. It loops through all prediction dict returned by FastAPI
                     for item in response.json() 
@@ -250,7 +250,7 @@ class SpoilageNotificationService():
     @staticmethod
     async def check_spoilage():
         almost_expired_prod = Product.objects.filter( # no need await
-            expire_date__lt = timezone.now() + timedelta(days=14), # 14 days
+            expire_date__lt = timezone.localdate() + timedelta(days=14), # 14 days
             is_deleted = False
         ).select_related("shelf") #join shelf table
 
