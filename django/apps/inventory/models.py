@@ -29,7 +29,7 @@ class Product(models.Model):
     name = models.CharField(max_length=100)
     shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
     type = models.CharField(max_length=50, choices=WeatherBehavior.choices)
-    expire_date = models.DateTimeField(db_index=True)
+    expire_date = models.DateField(db_index=True)
     quantity = models.PositiveIntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
     selling_price = models.DecimalField(max_digits=8, decimal_places=2, validators=[MinValueValidator(0)])
@@ -42,7 +42,7 @@ class Product(models.Model):
     def shelf_life(self):
         """ Calculates remaining shelf life dynamically based on the current date (Returns 7 today, 6 tomorrow, 5 the day after, and stops at 0). """
         if self.expire_date:
-            date_diff = self.expire_date - timezone.now()
+            date_diff = self.expire_date - timezone.localdate()
             return max(date_diff.days, 0) # "take the calculated days, but limit it at a minimum of 0"
         return 0 
 
@@ -72,7 +72,7 @@ class OrderPrediction(models.Model):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     demand_prediction = models.PositiveIntegerField()
     order_suggestion = models.PositiveIntegerField()
-    target_timing = models.DateTimeField()
+    target_timing = models.DateField()
 
     def __str__(self):
         return f"Order prediction for: {self.product.name}"
