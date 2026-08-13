@@ -9,6 +9,7 @@ djangorestframework = "*"
 requests = "*"
 psycopg2-binary = "*"
 httpx = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
