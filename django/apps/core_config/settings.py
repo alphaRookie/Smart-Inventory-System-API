@@ -10,26 +10,34 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+# -------------------- .env setup --------------------
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Points to project root folder where .env and manage.py live
+# call .parent 3 times bcoz .env located at 3rd parent (django folder)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7+*pep=t&sa%g0w!@%z2&7nu99lorwm)1eqwg6#2a7!0c66h4^'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+# Load variables from .env into os.environ
+load_dotenv(BASE_DIR / ".env")
 
 
-# Application definition
+
+# -------------------- Security --------------------
+
+# .environ will auto-throw an error if value in .env missing
+SECRET_KEY = os.environ['SECRET_KEY'] 
+
+# in .env set to "DEBUG=False" to be Production ; "DEBUG=True" to be Local
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
+
+# which URLs are allowed to talk to
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '*').split(',') if host.strip()] # cleans up accidental spaces and trailing commas
+
+
+
+# -------------------- Application definition --------------------
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -72,23 +80,23 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core_config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+
+# -------------------- Database --------------------
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'inventory_db'),
-        'USER': os.getenv('DB_USER', 'alfa'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'alfaruqi2005.'),
-        'HOST': os.getenv('DB_HOST', '127.0.0.1'), # Switch to 'db' in Docker
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': os.environ['DB_NAME'],
+        'USER': os.environ['DB_USER'],
+        'PASSWORD': os.environ['DB_PASSWORD'],
+        'HOST': os.environ['DB_HOST'],
+        'PORT': os.environ['DB_PORT'],
     }
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
+
+# -------------------- Password validation & Internationalization --------------------
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -105,20 +113,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
+
+# -------------------- Static files (CSS, JavaScript, Images) --------------------
 
 STATIC_URL = 'static/'
