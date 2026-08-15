@@ -174,13 +174,9 @@ class SingleOrderPredictionView(View):
     """ View that triggers the AI prediction for a specific product and displays it on the dashboard """
 
     async def post(self, request, product_id):
-        product = await aget_object_or_404(
-            Product.objects.select_related("shelf"), # during fetching Product, fetch the Shelf and join it at same time
-            id=product_id
-        ) 
-        shelf = product.shelf
+        product = await aget_object_or_404(Product, id=product_id) 
         
-        ai_data = await OrderPredictionService.fetch_single_prediction(product=product, shelf=shelf)
+        ai_data = await OrderPredictionService.fetch_single_prediction(product=product)
         
         if not ai_data:
             return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
