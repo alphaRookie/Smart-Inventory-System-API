@@ -10,6 +10,8 @@ requests = "*"
 psycopg2-binary = "*"
 httpx = "*"
 python-dotenv = "*"
+celery = "*"
+redis = "*"
 
 [dev-packages]
 
