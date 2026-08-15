@@ -7,6 +7,8 @@ from rest_framework.exceptions import ValidationError
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Q, F, Sum
 import httpx
+import os
+from asgiref.sync import sync_to_async
 
 
 class ProductService():
@@ -152,25 +154,36 @@ class SalesService():
 class OrderPredictionService():
 
     @staticmethod
-    async def fetch_single_prediction(product:Product, shelf:Shelf):
+    async def fetch_single_prediction(product:Product):
         """ Sends a single product data to FastAPI and returns the prediction numbers. """
+
+        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
+        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+
+        if lookback_days_sales < 1:
+            raise ValidationError("Cannot lookback the sales data happened less than 1 day")
+        if target_days_prediction < 1:
+            raise ValidationError("Target days prediction must be at least 1 day.")
+        if target_days_prediction > 5:
+            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
 
         # FastAPI URL endpoint
         url = "http://127.0.0.1:8001/api/predict-single"
 
-        # find out how many product is sold based on each different types in the last 3 days
+        # find out how many product is sold based on each different types in the last ... days
         demand = await Sales.objects \
-            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
+            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback_days_sales)) \
             .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
         # Request data to be sent to Fast api
         payload = {
             "product_id": product.id,
             "product_type": product.type,
-            "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
-            "current_stock": int(shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
+            "base_demand": int(demand["base_demand"] / lookback_days_sales), # divide by ... to get daily baseline
+            "current_stock": int(product.quantity) if product else 0, # explicitly, bcoz from a web form, they usually come in as strings
+            "target_days_prediction": int(target_days_prediction)
         }
-        
+
         try:
             async with httpx.AsyncClient() as client: # 1 call = 1 connection setup per product
                 response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
@@ -181,7 +194,7 @@ class OrderPredictionService():
                     product=product,
                     demand_prediction=response.json()["predicted_demand"],
                     order_suggestion=response.json()["suggested_order"],
-                    target_timing=timezone.localdate() + timedelta(days=3)
+                    target_timing=timezone.localdate() + timedelta(days=target_days_prediction)
                 )
 
                 # 2.Return a dictionary so ai_data.get() can works in views
@@ -191,37 +204,55 @@ class OrderPredictionService():
                 }
             return None
         
-        except httpx.HTTPError:
+        except Exception as e:
+            print(f"Error in single prediction: {str(e)}")
             return None
 
 
-    @staticmethod
+    @staticmethod 
     async def fetch_batch_prediction():
         """ Sends all products data to FastAPI and returns the prediction numbers. """
+
+        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
+        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+
+        if lookback_days_sales < 1:
+            raise ValidationError("Cannot lookback the sales data happened less than 1 day")
+        if target_days_prediction < 1:
+            raise ValidationError("Target days prediction must be at least 1 day.")
+        if target_days_prediction > 5:
+            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
 
         # FastAPI URL endpoint
         url = "http://127.0.0.1:8001/api/predict-batch"
 
         payload = [] # hold 'list' of data to be sent out to Fast Api
 
-        products = Product.objects.filter(is_deleted=False).select_related("shelf")
+        products = Product.objects.filter(is_deleted=False)
         async for product in products:
-            # find out how many product is sold based on each different types in the last 3 days
+            # find out how many product is sold based on each different types in the last ... days
             demand = await Sales.objects \
-                .filter(product=product, created_at__gte= timezone.now() - timedelta(days=3)) \
+                .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback_days_sales)) \
                 .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
             # Request data to be sent to Fast api (Stored in Dictionary)
             payload.append({
                 "product_id": product.id,
-                "product_type": product.type,
-                "base_demand": int(demand["base_demand"] / 3), # divide by 3 to get daily baseline
-                "current_stock": int(product.shelf.current_stock) # explicitly, bcoz from a web form, they usually come in as strings
+                "product_type": product.type, 
+                "base_demand": int(demand["base_demand"] / lookback_days_sales), # divide by ... to get daily baseline
+                "current_stock": int(product.quantity), 
+                "target_days_prediction": int(target_days_prediction)
             })
+
+        # WRAP IT in a Dict to macth BatchPredictionRequest in main.py
+        custom_payload = {
+            "target_days_prediction": int(target_days_prediction),
+            "requests_list": payload,
+        }
             
         try: #safely catch any error happened inside try block
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
+                response = await client.post(url, json=custom_payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
             
             if response.status_code == 200:
                 new_records = [
@@ -229,20 +260,23 @@ class OrderPredictionService():
                         product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
                         demand_prediction = item["predicted_demand"], 
                         order_suggestion = item["suggested_order"],
-                        target_timing = timezone.localdate() + timedelta(days=3)
+                        target_timing = timezone.localdate() + timedelta(days=target_days_prediction)
                     )
                     # LOOP COMPREHENSIVE. It loops through all prediction dict returned by FastAPI
                     for item in response.json() 
                 ]
 
-                # Saves all items into PostgreSQL in 1 single SQL query
-                await OrderPrediction.objects.abulk_create(new_records)
+                # WRAP DB SAVE IN sync_to_async TO FIX Async Context Error
+                if new_records:
+                    await sync_to_async(OrderPrediction.objects.bulk_create)(new_records)
+
                 return {"total_processed": len(new_records)}
 
             return {"total_processed": 0, "error": f"FastAPI error: {response.status_code}"}
         
-        except httpx.HTTPError:
-            return {"total_processed": 0, "error": "Connection failed"}
+        except Exception as e:
+            print(f"Error in batch prediction: {str(e)}")
+            return {"total_processed": 0, "error": "Connection failed"} # skipped error part and goes to next
 
 
 
