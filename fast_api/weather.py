@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 import httpx
 
+# reads all saved data from .env
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
-
-# Read coordinates dynamically from the env configuration
 LAT = os.getenv('STORE_LAT')
 LON = os.getenv('STORE_LON')
 
@@ -16,7 +15,7 @@ class LocalWeather(BaseModel):
     humidity: int
     condition: str
 
-async def get_local_weather():
+async def get_local_weather(target_days):
     async with httpx.AsyncClient() as client:
         url = f'https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric' # use "forecast" to call the 5-day prediction instead of current weather
         
@@ -25,12 +24,18 @@ async def get_local_weather():
             response_data = response.json() # must await the response, and then parse the JSON
             forecast_list = response_data.get('list', [])  # This is the big box of 40 packets (Each packet is 3 hours apart)
             
-            # grab the specific time packet (number 8 --24 hours into the future)
-            tomorrow_data = forecast_list[8] 
+            if not forecast_list: # stop if API_KEY, LAT, or LON are invalid
+                print("No forecast list returned from OpenWeatherMap.")
+                return None
+            
+            # grab the specific time packet (number 8 --24 hours into the future * selected days)
+            # prevent -1 index (when target_days=0), while keep max index at 39(target_days=40 at highest)
+            package_wanted = max(0, min((target_days * 8) - 1, 39)) # If target_days=3, we want 3*8 = 24 packets into the future. Index is 23.
+            selected_package = forecast_list[package_wanted] 
             
             # and then we dig inside that packet to grab the specific data
-            main_data = tomorrow_data.get('main', {})
-            weather_data = tomorrow_data.get('weather', [{}])[0] #grab first item
+            main_data = selected_package.get('main', {})
+            weather_data = selected_package.get('weather', [{}])[0] #grab first item
             
             # finally extract the values and return
             return LocalWeather(
