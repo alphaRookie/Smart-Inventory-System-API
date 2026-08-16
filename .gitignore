@@ -23,3 +23,9 @@ staticfiles/
 
 # Ignore trained machine learning model files
 *.joblib
+
+# Celery Beat database files
+celerybeat-schedule*
+
+# Redis database snapshots
+*.rdb
