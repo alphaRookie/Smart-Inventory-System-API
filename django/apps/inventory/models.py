@@ -27,7 +27,7 @@ class Product(models.Model):
         WEATHER_NEUTRAL = "WEATHER_NEUTRAL", _("All-Weather") # Sales are steady, ignore the weather
     id: int
     name = models.CharField(max_length=100)
-    shelf = models.ForeignKey(Shelf, on_delete=models.PROTECT)
+    shelves = models.ManyToManyField(Shelf, through="ProductShelf") # tells py to use this custom connector table (instead of auto-create)
     type = models.CharField(max_length=50, choices=WeatherBehavior.choices)
     expire_date = models.DateField(db_index=True)
     quantity = models.PositiveIntegerField(default=0)
@@ -53,6 +53,20 @@ class Product(models.Model):
         if self.shelf_life == 0:
             return True
         return False
+
+
+class ProductShelf(models.Model):
+    """ The intermediate 'through' table to track how much product quantities per shelf """
+    id: int
+    shelf = models.ForeignKey(Shelf, on_delete=models.CASCADE, related_name="product_allocations") # Reverse lookup (e.g., shelf.product_allocations.all())    --List of shelves assigned to this product
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="shelf_allocations") # Reverse lookup (e.g., product.shelf_allocations.all())  --List of products sitting in this shelf
+    quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("product", "shelf") # Ensures a product is only listed once per shelf
+
+    def __str__(self):
+        return f"{self.product.name} on Shelf {self.shelf.id}: {self.quantity} items"
 
 
 class Sales(models.Model):
