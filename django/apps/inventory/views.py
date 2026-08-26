@@ -23,12 +23,17 @@ class ProductAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def post(self, request):
+        # 1. REQUEST STAGE: Use serializer to READ and VALIDATE incoming JSON
         serializer = ProductSerializer(data = request.data) # JSON to Model
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
+
+        # Hand off validated data to service layer
         product = ProductService.save_product(
             product=None, **validated_data
         )
+
+        # 2. RESPONSE STAGE: Use serializer to format database model back into JSON
         return Response({
             "message": "New product added",
             "product": ProductSerializer(product).data 
@@ -57,8 +62,7 @@ class ProductItemAPIView(APIView):
 
     def delete(self, request, pk):
         product = get_object_or_404(Product, pk=pk) # ambil spesific product based on id referring to URL yg diketik
-        shelf = product.shelf  # once we found that product, find which spesific shelf that carry this product
-        ProductService.delete_product(product=product, shelf=shelf)
+        ProductService.delete_product(product=product)
         return Response({"message": f"{product.name} deleted"},status=status.HTTP_200_OK)
 
 
