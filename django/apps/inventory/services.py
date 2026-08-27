@@ -111,14 +111,21 @@ class ProductService():
     
 
     @staticmethod
-    def delete_product(product: Product, shelf: Shelf):
-        if product:
-            shelf.current_stock -= product.quantity # delete from shelf stock
-            shelf.save()
-            
-            product.is_deleted = True # mark with soft delete
-            product.save()
-            return shelf
+    def delete_product(product: Product):
+
+        prod_shelf = product.shelf_allocations.all() # return queryset, not list of dict
+        for item in prod_shelf:
+            # decrease obj in shelf table with obj in product table
+            item.shelf.current_stock -= item.quantity 
+            item.shelf.save()
+
+            # ensure the quantity will set to 0 when gets deleted
+            item.quantity = 0
+            item.save()
+
+        product.is_deleted = True # mark with soft delete
+        product.save()
+        return product
 
 
 class ShelfService():
