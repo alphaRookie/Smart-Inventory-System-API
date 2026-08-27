@@ -91,6 +91,18 @@ class ProductService():
             if existing_name.exists():
                 raise ValidationError(f"A product named '{name}' already exists on this shelf")
 
+        # M2M Validations
+        total_qty = clean_kwargs.get("quantity") or (product.quantity if product else 0)
+        if shelf_alloc is not None:
+            # Validation 5
+            if len(shelf_alloc) == 0:
+                raise ValidationError("Product must be assigned to at least one shelf.")
+
+            # Validation 6
+            qty_pershelf = [item.get("quantity", 0) for item in shelf_alloc] #safely return 0
+            if total_qty != sum(qty_pershelf):
+                raise ValidationError(f"The total quantity of a product ({total_qty}) must match the number of product to be assign in each shelves")
+            
 
         # pop the custom field out, bcoz Product model dont have this field (this belong to 3rd table)
         allocations_data = clean_kwargs.pop("shelf_allocations", None)
