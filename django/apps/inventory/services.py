@@ -161,14 +161,35 @@ class ShelfService():
 
 class SalesService():
     @staticmethod
-    def decrease_stock(sales: Sales): 
-        # auto-decrease quantity and currect stock when sales triggered
-        sales.product.quantity -= sales.quantity_sold
-        sales.product.shelf.current_stock -= sales.quantity_sold
+    def _decrease_stock(sales: Sales): # auto-decrease quantity and currect stock when sales triggered
 
-        sales.product.shelf.save()
+        # feature: automatically switch the to another shelf if one shelf (that carries a spesific prod) is empty
+        quantity_wanted = sales.quantity_sold
+
+        for alloc in sales.product.shelf_allocations.order_by("id"):  # access all shelves where this spesific product located and order by ID
+            if quantity_wanted <= 0:
+                break
+
+            # when enough stock. It deducts quantity_wanted, sets it to = 0, updates Shelf #1, and on the next loop, bcoz now quantity_wanted <= 0 it triggers break in next iteration
+            if alloc.quantity >= quantity_wanted: # when first shelf is enough, stop it
+                alloc.quantity -= quantity_wanted
+                alloc.shelf.current_stock -= quantity_wanted
+                quantity_wanted = 0
+
+            # user ask 50q product A, prod A spread across s1=10, s2=15, s3=15, s4=20.. it drains shelf 1,2,3 and left shelf 4 with 10
+            else:
+                quantity_wanted -= alloc.quantity
+                alloc.shelf.current_stock -= alloc.quantity # deducts ONLY Product A's count from the total capacity of that shelf
+                alloc.quantity = 0 # emptied Prod A from shelf 1,2,3 (4 has remaining)
+
+            alloc.shelf.save()
+            alloc.save()
+            print(f"Shelf ID {alloc.shelf.id} remaining stock for product: {alloc.quantity}") #show result in terminal for debugging
+
+        sales.product.quantity -= sales.quantity_sold # decrease total quantity of a product (generally, not divided by shelves)
         sales.product.save()
         return sales
+
 
     @staticmethod
     def save_sales(**kwargs):
@@ -177,11 +198,11 @@ class SalesService():
         product = clean_kwargs.get("product") 
         quantity_sold = clean_kwargs.get("quantity_sold", 0)
 
+        if product and (quantity_sold > product.quantity): # use quantity bcoz it represent all quanty of a product, if i use shelf make no sense, bcoz a prod can be in multip shelfs
+            raise ValidationError(f"Not enough stock for {product.name}. Remaining stock: {product.quantity} ")
+
         if quantity_sold <= 0:
             raise ValidationError("Quantity sold must be greater than zero.")
-
-        if product and quantity_sold > product.shelf.current_stock:
-            raise ValidationError(f"Not enough stock available. Remaining stock: {product.shelf.current_stock}")
         
         if product and product.expire_date <= timezone.localdate():
             raise ValidationError("Cannot sell expired products.")
@@ -190,14 +211,15 @@ class SalesService():
         sales = Sales(**clean_kwargs) 
 
         # logic to auto-create 'total_revenue' field
-        if sales.quantity_sold and sales.product:
-            sales.total_revenue = sales.quantity_sold * sales.product.selling_price
+        if sales:
+            sales.total_revenue = quantity_sold * sales.product.selling_price
         else:
             sales.total_revenue = Decimal("0")
 
-        SalesService.decrease_stock(sales=sales)
+        sales.save() # save first before decrease it
+
+        SalesService._decrease_stock(sales=sales)
             
-        sales.save() 
         return sales
 
 
