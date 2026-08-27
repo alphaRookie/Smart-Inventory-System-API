@@ -1,5 +1,5 @@
 import requests
-from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
 from datetime import timedelta, date, datetime
 from decimal import Decimal
 from django.utils import timezone
@@ -11,25 +11,33 @@ import os
 from asgiref.sync import sync_to_async
 
 
-class ProductService():
+class ProductService(): 
     @staticmethod
-    def increase_stock( #auto-increase currect stock when new product added/patched
-        shelf: Shelf,
-        product: Product,
-    ):
-        if product.id is None:
-            shelf.current_stock += product.quantity # add with whatever the quantity user put
-            shelf.save()
-            return shelf
-        
-        else:#if its indeed the product that user adding rn, find out how much the quantity previously, then decrease with the new 
-            if Product.objects.filter(id=product.id).exists(): 
-                existing_prod = Product.objects.get(id=product.id)
-                new_prod = product.quantity
-                shelf.current_stock += (new_prod - existing_prod.quantity) # access quantity of the exsting prod
+    def _increase_stock(product: Product, shelf_alloc): #auto-increase currect stock when new product added/patched
+        for item in shelf_alloc: 
+            shelf = item["shelf"]
+            qty = item["quantity"]
+           
+            existing_link = ProductShelf.objects.filter(product=product, shelf=shelf).first() # Check if this spesifc product-shelf link already exists in the 3rd table
 
+            if existing_link is None: # 1. if the product is not exist, we create new one
+                shelf.current_stock += qty # add with whatever the quantity user put
+
+                ProductShelf.objects.create(
+                    product=product,
+                    shelf=shelf,
+                    quantity=qty
+                )
                 shelf.save()
-                return shelf
+            
+            else: # 2. if the product link already exist, we do Patch
+                qty_diff = qty - existing_link.quantity # new qty typed - old qty from DB
+                shelf.current_stock += qty_diff # update the value in shelf table
+                shelf.save()
+
+                existing_link.quantity = qty # update value in ProductShelf table
+                existing_link.save()
+                
 
     @staticmethod
     def save_product(product: Product | None=None, **kwargs):
@@ -37,18 +45,30 @@ class ProductService():
         # receive the raw kwargs package and filter out None value
         clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
+        shelf_alloc = clean_kwargs.get("shelf_allocations")
+        if shelf_alloc is None and product: # fallback if shelf_allocation field empty in patch
+            shelf_alloc = [
+                {"shelf": ps.shelf, "quantity": ps.quantity}
+                for ps in product.shelf_allocations.all()
+            ]
+        
         # Validation 1
-        target_shelf = clean_kwargs.get("shelf") or (product.shelf if product else None) # take user input or take from DB(if user didnt input when patching)
-        quantity = clean_kwargs.get("quantity") or (product.quantity if product else None)
-        if target_shelf and quantity:
-            available_space = target_shelf.max_shelf_capacity - target_shelf.current_stock
+        if shelf_alloc:
+            for item in shelf_alloc: # unpack the payload (it's a list of dictionaries)
+                shelf = item["shelf"]
+                qty = item["quantity"]
 
-            if quantity > available_space:
-                raise ValidationError(f"Cannot fit {quantity} units on this shelf, Only {available_space} space remaining.")
+                # 2 lines below is to handle when patching (when PATCH we need true available space, not user input quantity like when POST)
+                existing_link = ProductShelf.objects.filter(product=product, shelf=shelf).first() if product else None
+                old_qty = existing_link.quantity if existing_link else 0
+
+                available_space = (shelf.max_shelf_capacity - shelf.current_stock) + old_qty
+                if qty > available_space:
+                    raise ValidationError(f"Can't fit {qty} units on shelf id '{shelf.id}', space remaining: {available_space} ")
 
         # Validation 2
-        selling_price = clean_kwargs.get("selling_price") or (product.selling_price if product else None)
-        unit_cost = clean_kwargs.get("unit_cost") or (product.unit_cost if product else None)
+        selling_price = clean_kwargs.get("selling_price") or (product.selling_price if product else 0)
+        unit_cost = clean_kwargs.get("unit_cost") or (product.unit_cost if product else 0)
         if selling_price and unit_cost:
             if selling_price < unit_cost:
                 raise ValidationError("Selling price cannot be lower than unit cost (negative profit margin)")
@@ -59,13 +79,21 @@ class ProductService():
             raise ValidationError("Cannot add or update product with an expiration date in the past")
         
         # Validation 4
-        name = clean_kwargs.get("name") or (product.name if product else None)
-        existing_name = Product.objects.filter(name__iexact=name, shelf=target_shelf) #Case-insensitive check
-        if product: # Only exclude if product actually exists btw
-            existing_name = existing_name.exclude(id=product.id) # "Look for other products with this name, but ignore the product I am currently editing"
-        if existing_name.exists():
-            raise ValidationError(f"A product named '{name}' already exists on this shelf")
+        if shelf_alloc:
 
+            name = clean_kwargs.get("name") or (product.name if product else None)
+            target_shelf = [item["shelf"] for item in shelf_alloc] # unpack with list comprehensive
+
+            existing_name = Product.objects.filter(name__iexact=name, shelves__in=target_shelf) #Case-insensitive check
+
+            if product: # Only exclude if product actually exists btw
+                existing_name = existing_name.exclude(id=product.id) # "Look for other products with this name, but ignore the product I am currently editing"
+            if existing_name.exists():
+                raise ValidationError(f"A product named '{name}' already exists on this shelf")
+
+
+        # pop the custom field out, bcoz Product model dont have this field (this belong to 3rd table)
+        allocations_data = clean_kwargs.pop("shelf_allocations", None)
 
         if product:
             for key, value in clean_kwargs.items():   # Step 1: Loop through all valued fields from clean kwargs
@@ -73,7 +101,10 @@ class ProductService():
         else:
             product = Product(**clean_kwargs)
 
-        ProductService.increase_stock(shelf=product.shelf, product=product)
+        product.save() # save product first so it gets a database ID for the 3rd table
+
+        if allocations_data:
+            ProductService._increase_stock(product=product, shelf_alloc=allocations_data)
             
         product.save()
         return product
@@ -286,7 +317,7 @@ class SpoilageNotificationService():
         almost_expired_prod = Product.objects.filter( # no need await
             expire_date__lt = timezone.localdate() + timedelta(days=14), # 14 days
             is_deleted = False
-        ).select_related("shelf") #join shelf table
+        )
 
         notifications_count = 0
         notif_list = []
@@ -295,7 +326,7 @@ class SpoilageNotificationService():
         # loop through each expiring product
         async for prod in almost_expired_prod:
             # each leftover stock of these expiring prod
-            stock_left = prod.shelf.current_stock 
+            stock_left = prod.quantity
 
             # fetch latest prediction for this prod (as prediction can be multiple)
             prediction = await OrderPrediction.objects.filter(product=prod).afirst()
