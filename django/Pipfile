@@ -12,6 +12,7 @@ httpx = "*"
 python-dotenv = "*"
 celery = "*"
 redis = "*"
+drf-spectacular = "*"
 
 [dev-packages]
 
