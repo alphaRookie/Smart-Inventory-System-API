@@ -1,20 +1,21 @@
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404, aget_object_or_404
 from typing import cast
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from django.utils.decorators import method_decorator
-from django.views import View
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from adrf.views import APIView # auto-recognize when async def mentioned
 
 from .models import Product, Shelf, Sales, OrderPrediction, SpoilageNotification
 from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageNotificationSerializer
 from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageNotificationService
 
 
+@extend_schema_view(
+    get=extend_schema(summary="List all Products", responses={200: ProductSerializer(many=True)}),
+    post=extend_schema(summary="Adds a New Product", request=ProductSerializer, responses={201: ProductSerializer})
+)
 class ProductAPIView(APIView):
 
     def get(self, request):
@@ -39,7 +40,11 @@ class ProductAPIView(APIView):
             "product": ProductSerializer(product).data 
         }, status=status.HTTP_201_CREATED)
     
-    
+@extend_schema_view(
+    get=extend_schema(summary="Returns the details of a specific Product by ID", responses={200: ProductSerializer}),
+    patch=extend_schema(summary="Updates an existing Product", request=ProductSerializer, responses={200: ProductSerializer}),
+    delete=extend_schema(summary="Deletes a Product by ID", responses={204: None})
+)
 class ProductItemAPIView(APIView):
 
     def get(self, request, pk):
@@ -67,6 +72,10 @@ class ProductItemAPIView(APIView):
 
 
 
+@extend_schema_view(
+    get=extend_schema(summary="List all Shelves", responses={200: ShelfSerializer(many=True)}),
+    post=extend_schema(summary="Adds a New Shelf", request=ShelfSerializer, responses={201: ShelfSerializer})
+)
 class ShelfAPIView(APIView):
 
     def get(self, request):
@@ -86,7 +95,11 @@ class ShelfAPIView(APIView):
             "stock level": ShelfSerializer(shelf).data 
         }, status=status.HTTP_201_CREATED)
     
-    
+@extend_schema_view(
+    get=extend_schema(summary="Returns the details of a specific Shelf by ID", responses={200: ShelfSerializer}),
+    patch=extend_schema(summary="Updates an existing Shelf", request=ShelfSerializer, responses={200: ShelfSerializer}),
+    delete=extend_schema(summary="Deletes a Shelf by ID",responses={204: None})
+)
 class ShelfItemAPIView(APIView):
 
     def get(self, request, pk):
@@ -115,6 +128,10 @@ class ShelfItemAPIView(APIView):
 
 
 
+@extend_schema_view(
+    get=extend_schema(summary="List all Sales", responses={200: SalesSerializer(many=True)}),
+    post=extend_schema(summary="Adds a New Sale", request=SalesSerializer, responses={201: SalesSerializer})
+)
 class SalesAPIView(APIView):
 
     def get(self, request):
@@ -134,7 +151,10 @@ class SalesAPIView(APIView):
             "sales": SalesSerializer(sales).data 
         }, status=status.HTTP_201_CREATED)
     
-    
+@extend_schema_view(
+    get=extend_schema(summary="Retrieves the details of a specific Sale by ID", responses={200: SalesSerializer}),
+    delete=extend_schema(summary="Deletes a Sales by ID", responses={204: None})
+)
 class SalesItemAPIView(APIView):
 
     def get(self, request, pk):
@@ -150,6 +170,9 @@ class SalesItemAPIView(APIView):
 
 
 
+@extend_schema_view(
+    get=extend_schema(summary="List all Predicted Orders", responses={200: OrderPredictionSerializer(many=True)}),
+)
 class OrderPredictionAPIView(APIView):
 
     def get(self, request):
@@ -157,7 +180,10 @@ class OrderPredictionAPIView(APIView):
         serializer = OrderPredictionSerializer(order_prediction, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
+@extend_schema_view(
+    get=extend_schema(summary="Retrieves the details of a specific Predicted Order by ID", responses={200: OrderPredictionSerializer}),
+    delete=extend_schema(summary="Deletes a Predicted order by ID", responses={204: None})
+)
 class OrderPredictionItemAPIView(APIView):
 
     def get(self, request, pk):
@@ -171,10 +197,10 @@ class OrderPredictionItemAPIView(APIView):
         return Response({"message": f"OrderPrediction data deleted"},status=status.HTTP_200_OK)
 
 
-# Because DRF is external package, its core source code is already written as synchronous code (def)
-# so i bypass DRF using native Django's View and JsonResponse instead
-@method_decorator(csrf_exempt, name="dispatch")
-class SingleOrderPredictionView(View):
+@extend_schema_view(
+    post=extend_schema(summary="Runs a New Order Prediction for a single target Product", request=OrderPredictionSerializer, responses={201: OrderPredictionSerializer})
+)
+class SingleOrderPredictionView(APIView):
     """ View that triggers the AI prediction for a specific product and displays it on the dashboard """
 
     async def post(self, request, product_id):
@@ -183,9 +209,9 @@ class SingleOrderPredictionView(View):
         ai_data = await OrderPredictionService.fetch_single_prediction(product=product)
         
         if not ai_data:
-            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        return JsonResponse({ # Return JSON result to the dashboard
+        return Response({ # Return JSON result to the dashboard
             "product_id": product.id,
             "product_name": product.name,
             "product_type": product.type,
@@ -194,23 +220,28 @@ class SingleOrderPredictionView(View):
         }, status=status.HTTP_200_OK)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class BatchOrderPredictionView(View):
+@extend_schema_view(
+    post=extend_schema(summary="Runs a New Order Predictions for all Products in a single run", request=OrderPredictionSerializer, responses={201: OrderPredictionSerializer})
+)
+class BatchOrderPredictionView(APIView):
     """ Optional action to manually triggers the AI prediction for all products (by default this automatically run by celery) """
 
     async def post(self, request):
         ai_data = await OrderPredictionService.fetch_batch_prediction()
 
         if not ai_data:
-            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
-        return JsonResponse({
+        return Response({
             "message": "Batch predictions successfully done",
             "total_processed": ai_data.get("total_processed"), 
         }, status=status.HTTP_200_OK)
 
 
 
+@extend_schema_view(
+    get=extend_schema(summary="List all results of Spoilage Check", responses={200: SpoilageNotificationSerializer(many=True)})
+)
 class SpoilageNotificationAPIView(APIView):
 
     def get(self, request):
@@ -218,7 +249,10 @@ class SpoilageNotificationAPIView(APIView):
         serializer = SpoilageNotificationSerializer(spoilage_notif, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
+@extend_schema_view(
+    get=extend_schema(summary="Retrieves a specific result of Spoilage Check by ID", responses={200: SpoilageNotificationSerializer}),
+    delete=extend_schema(summary="Deletes a Spoilage Check result by ID", responses={204: None})
+)
 class SpoilageNotificationItemAPIView(APIView):
 
     def get(self, request, pk):
@@ -232,18 +266,19 @@ class SpoilageNotificationItemAPIView(APIView):
         return Response({"message": "Notification message deleted"},status=status.HTTP_200_OK)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class SpoilageCheckView(View):
+@extend_schema_view(
+    post=extend_schema(summary="Runs the Spoilage check", request=SpoilageNotificationSerializer, responses={201: SpoilageNotificationSerializer})
+)
+class SpoilageCheckView(APIView):
     """ Optional action to manually triggers spoilage check (by default this automatically run by celery) """
 
     async def post(self, request):
         ai_data = await SpoilageNotificationService.check_spoilage()
 
         if not ai_data:
-            return JsonResponse({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
-        return JsonResponse({
+        return Response({
             "message": ai_data.get("notif_count"), 
             "predictions": ai_data.get("result")  # List prediction results if found the new, otherwise show text (service)
         }, status=status.HTTP_200_OK) 
-    
