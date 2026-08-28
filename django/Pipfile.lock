@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "a48709a50584b5545775bebd9b9bdf93cb31e9d3eb0b4e83eca4e136d0380775"
+            "sha256": "54022fd4f6aad2151b0d8a70d420ca8c642b9b207df368b4c9696f459a7cbe9b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,15 @@
         ]
     },
     "default": {
+        "adrf": {
+            "hashes": [
+                "sha256:c6ded6771a4a2a65c8dad3d3bf027cf0bb7b01025f8e9dff18c9a58920edeac6",
+                "sha256:dcf03cb6fbeb5d37dcb819740c17dd40db36481bbbb049f9fa8f39675747607b"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==0.1.14"
+        },
         "amqp": {
             "hashes": [
                 "sha256:43b3319e1b4e7d1251833a93d672b4af1e40f3d632d479b98661a95f117880a2",
@@ -39,6 +48,13 @@
             ],
             "markers": "python_version >= '3.10'",
             "version": "==3.12.1"
+        },
+        "async-property": {
+            "hashes": [
+                "sha256:17d9bd6ca67e27915a75d92549df64b5c7174e9dc806b30a3934dc4ff0506380",
+                "sha256:8924d792b5843994537f8ed411165700b27b2bd966cefc4daeefc1253442a9d7"
+            ],
+            "version": "==0.2.2"
         },
         "attrs": {
             "hashes": [
