@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'inventory.apps.InventoryConfig',
+    'drf_spectacular'
     # celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
 ]
 
@@ -160,3 +161,18 @@ CELERY_BEAT_SCHEDULE = { # when to run task
     },
 }
 
+
+
+# -------------------- DRF --------------------
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
+}
+
+
+
+# -------------------- Swagger & Redoc --------------------
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Inventory Management System API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
