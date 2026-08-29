@@ -3,7 +3,12 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from django.utils import timezone
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from django.db.models.manager import RelatedManager
+    from .models import ProductShelf  
+    
 
 class Shelf(models.Model):
     class Category(models.TextChoices):
@@ -17,7 +22,10 @@ class Shelf(models.Model):
     max_shelf_capacity = models.PositiveIntegerField()
 
     def __str__(self):
-        return f"Shelf category:{self.category} ; Id:{self.id}"
+        return f"Category:{self.category} ; Id:{self.id}"
+
+    if TYPE_CHECKING:
+        product_allocations: RelatedManager[ProductShelf]
 
 
 class Product(models.Model):
@@ -37,6 +45,9 @@ class Product(models.Model):
     
     def __str__(self):
         return self.name
+
+    if TYPE_CHECKING:
+        shelf_allocations: RelatedManager[ProductShelf]
 
     @property
     def shelf_life(self):
