@@ -9,6 +9,7 @@ from django.db.models import Count, Q, F, Sum
 import httpx
 import os
 from asgiref.sync import sync_to_async
+import logging
 
 
 class ProductService(): 
@@ -390,7 +391,7 @@ class SpoilageNotificationService():
                             product = prod,
                             level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                             message = (
-                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}"
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}. "
                                 f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
                             )
                         )
@@ -404,9 +405,55 @@ class SpoilageNotificationService():
                         "level": SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                     })
 
-        await SpoilageNotification.objects.abulk_create(notif_list)
+        if notif_list:
+            # 1. bulk save to DB
+            await SpoilageNotification.objects.abulk_create(notif_list) 
+
+            # 2. Build phone notification message
+            msg = (
+                f"🚨 <b>Spoilage Alert Triggered!</b>\n"
+                f"Created <b>{len(notif_list)}</b> new warning alerts.\n\n"
+            )
+            
+            # Add up to 5 items so the lock screen stays clean
+            for item in show_result[:5]:
+                msg += f"• <b>{item['product_name']}</b>: Risk of {item['spoilage_risk']} units\n"
+
+            # 3. Send straight to Telegram lock screen
+            await TelegramBot.send_alert(msg)
+
         return {
             "notif_count": f"Spoilage check completed. {notifications_count} new alerts created.",
             "result": show_result if notifications_count>0 else "No new potential spoilage found, please check inbox to see previous notifications created."
         }
 
+
+
+# logging records events quietly. It writes a message to a background log file or server console without stopping the code like in "raise"
+logger = logging.getLogger(__name__)
+
+class TelegramBot():
+    @staticmethod
+    async def send_alert(message: str):
+        """Sends an async message to Telegram account using HTTPX"""
+
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", None)
+        chat_id = os.getenv("TELEGRAM_CHAT_ID", None)
+        if not bot_token or not chat_id:
+            logger.warning("Telegram Bot Token or Chat ID is missing.")
+            return False
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(url, json=payload)
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Failed to send Telegram alert: {e}")
+            return False
