@@ -356,8 +356,9 @@ class OrderPredictionService():
 class SpoilageNotificationService():
     @staticmethod
     async def check_spoilage():
+        days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
         almost_expired_prod = Product.objects.filter( # no need await
-            expire_date__lt = timezone.localdate() + timedelta(days=14), # 14 days
+            expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), # decide when will get expired
             is_deleted = False
         )
 
