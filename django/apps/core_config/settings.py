@@ -16,8 +16,8 @@ import os
 from dotenv import load_dotenv
 
 # Points to project root folder where .env and manage.py live
-# call .parent 3 times bcoz .env located at 3rd parent (django folder)
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+# call .parent 4 times bcoz .env located at 4rd parent (root folder)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Load variables from .env into os.environ
 load_dotenv(BASE_DIR / ".env")
