@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: inventory-postgres
+    env_file:
+      - .env # env lives at root of my folder
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"] #match credential
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: inventory-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  django:
+    build:
+      context: . # tells Docker to look at the root folder (as starting point)
+      dockerfile: ./django/Dockerfile # need to specify build path bcoz we have separated Dockerfile for each framework
+    container_name: inventory-django
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment: # this part is precisely like .env
+      - DB_HOST=db 
+      - FASTAPI_URL=http://fastapi:8001 # DNS to connect to another container (Django to Fast api)
+    depends_on:
+      db:
+        condition: service_healthy #do the healthcheck DB first
+      redis:
+        condition: service_started
+      fastapi:                         
+        condition: service_started
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: ./fast_api/Dockerfile
+    container_name: inventory-fastapi
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file: 
+      - .env
+    volumes: # FastAPI needs access to "weather_model.joblib", which is generated locally and ignored by Git. Mounting "./ml_model:/app/ml_model" creates a direct window to your local machine's model folder.
+      - ./ml_model:/app/ml_model
+    depends_on:
+      - redis # no need to wait db bcoz fast_api dont interact with it
+
+volumes:
+  postgres_data:
+
+
