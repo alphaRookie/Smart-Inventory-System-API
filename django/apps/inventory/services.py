@@ -241,7 +241,9 @@ class OrderPredictionService():
             raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
 
         # FastAPI URL endpoint
-        url = "http://127.0.0.1:8001/api/predict-single"
+        # will automatically switch to docker DNS if run by docker
+        fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001") # in docker, "os.getenv" will refer to env section in d-compose 
+        url = f"{fastapi_host}/api/predict-single"
 
         # find out how many product is sold based on each different types in the last ... days
         demand = await Sales.objects \
@@ -297,7 +299,8 @@ class OrderPredictionService():
             raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
 
         # FastAPI URL endpoint
-        url = "http://127.0.0.1:8001/api/predict-batch"
+        fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")  # will automatically switch to docker DNS if run by docker
+        url = f"{fastapi_host}/api/predict-batch"
 
         payload = [] # hold 'list' of data to be sent out to Fast Api
 
