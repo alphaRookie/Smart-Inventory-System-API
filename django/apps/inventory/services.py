@@ -1,4 +1,3 @@
-import requests
 from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
 from datetime import timedelta, date, datetime
 from decimal import Decimal
@@ -6,9 +5,12 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Q, F, Sum
+from asgiref.sync import sync_to_async
+from django.db.models import Subquery, OuterRef
+from django.db.models import Exists
+
 import httpx
 import os
-from asgiref.sync import sync_to_async
 import logging
 
 
@@ -303,19 +305,25 @@ class OrderPredictionService():
         url = f"{fastapi_host}/api/predict-batch"
 
         payload = [] # hold 'list' of data to be sent out to Fast Api
+        
+        # Inner Query: find out how much this product is sold in the last ... days (iterate each diff pk)
+        # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
+        sales_subquery = Sales.objects \
+            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
+            .values('total') # 'values' at the end is to hand back result and throw away other columns from Sales
 
-        products = Product.objects.filter(is_deleted=False)
+        # Outer Query: For every product, run the inner sales_subquery. If it returns NULL, force it to 0, and attach that number to the product under name "base_demand"
+        products = Product.objects \
+            .filter(is_deleted=False) \
+            .annotate(base_demand=Coalesce(Subquery(sales_subquery), 0)) # Coalesce handles NULL when no sales happen yet for a product
+
         async for product in products:
-            # find out how many product is sold based on each different types in the last ... days
-            demand = await Sales.objects \
-                .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback_days_sales)) \
-                .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
-
             # Request data to be sent to Fast api (Stored in Dictionary)
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type, 
-                "base_demand": int(demand["base_demand"] / lookback_days_sales), # divide by ... to get daily baseline
+                "base_demand": int(product.base_demand / lookback_days_sales), # divide by ... to get daily baseline  #type:ignore
                 "current_stock": int(product.quantity), 
                 "target_days_prediction": int(target_days_prediction)
             })
@@ -359,43 +367,51 @@ class OrderPredictionService():
 class SpoilageNotificationService():
     @staticmethod
     async def check_spoilage():
-        days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
-        almost_expired_prod = Product.objects.filter( # no need await
-            expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), # decide when will get expired
-            is_deleted = False
-        )
 
         notifications_count = 0
         notif_list = []
         show_result = []
+
+        # 1st inner query
+        # fetch latest prediction for this prod (a product could have multiple prediction history bcoz it run every few days)
+        prediction_subquery = OrderPrediction.objects \
+            .filter(product=OuterRef('pk')) \
+            .order_by('-id') \
+            .values('demand_prediction')[:1] # refer to newest ID from that spesific product (in exchange to sort by created_at)
+
+        # 2nd inner query: Check if an unread notification already exists for this product (no need to show same thing)
+        notif_subquery = SpoilageNotification.objects.filter(
+            product=OuterRef('pk'), # "Find any unread notification where the product matches the outer product's ID"
+            is_read=False
+        )
+
+        # Outer query
+        days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
+        almost_expired_prod = Product.objects \
+            .filter(expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), is_deleted=False) \
+            .annotate(
+                demand_pred=Coalesce(Subquery(prediction_subquery), 0),
+                has_unread_notif=Exists(notif_subquery)
+            )
 
         # loop through each expiring product
         async for prod in almost_expired_prod:
             # each leftover stock of these expiring prod
             stock_left = prod.quantity
 
-            # fetch latest prediction for this prod (as prediction can be multiple)
-            prediction = await OrderPrediction.objects.filter(product=prod).afirst()
-            predicted_demand = prediction.demand_prediction if prediction else 0
-
-            spoilage_risk = stock_left - predicted_demand
+            spoilage_risk = stock_left - prod.demand_pred #type:ignore
             
-            if spoilage_risk <= 0:
-                continue # Stock will be sold out before expired (No alert needed) 
-            else:
-                # Spoilage risk detected!
-                already_notified = await SpoilageNotification.objects.filter( # Check if an unread notification already exists for this product
-                    product=prod, 
-                    is_read=False
-                ).aexists()
-
-                if not already_notified:
+            if spoilage_risk <= 0:# Stock will be sold out before expired (No alert needed) 
+                continue 
+            else: # Spoilage risk detected!
+                # no need 
+                if not prod.has_unread_notif: #type:ignore
                     notif_list.append(
                         SpoilageNotification( # Stored in Model Instance, not dict
                             product = prod,
                             level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                             message = (
-                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}. "
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {prod.demand_pred}. " #type:ignore
                                 f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
                             )
                         )
