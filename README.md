@@ -46,87 +46,92 @@ A fast, lightweight service built purely for machine learning predictions and fe
 For those who want to run everything directly on their computer.
 
 1. **Clone the repository**
-```bash
-git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
-cd pyproject2
-```
+    ```bash
+    git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
+    cd pyproject2
+    ```
 
 2. **Configure `.env` file**
 Create a `.env` file in your project root containing all of these configuration:
 > [!NOTE]
 > Make sure to create `.env` file in the project root, otherwise you need to change `.parent` config path inside `settings.py`
-```env
-# ----- Django Core Settings -----
-SECRET_KEY=...
-DEBUG=True # Set to False in production
-ALLOWED_HOSTS=127.0.0.1,localhost
+    ```env
+    # ----- Django Core Settings -----
+    SECRET_KEY=...
+    DEBUG=True # Set to False in production
+    ALLOWED_HOSTS=127.0.0.1,localhost,django #refer to django container name
 
-# ----- Database Configuration -----
-DB_NAME=...
-DB_USER=...
-DB_PASSWORD=...
-DB_HOST=127.0.0.1
-DB_PORT=5432
+    # ----- Database Configuration -----
+    DB_NAME=...
+    DB_USER=...
+    DB_PASSWORD=...
+    DB_HOST=127.0.0.1
+    DB_PORT=5432
 
-# ----- Order Prediction Parameters -----
-LOOKBACK_DAYS_SALES=... # find all sales data for the past ... days (to calculate avg daily demand)
-TARGET_DAYS_PREDICTION=... # number of upcoming days to predict stock demand (limit to 5 by OpenWeather)
+    # ----- Order Prediction Parameters -----
+    LOOKBACK_DAYS_SALES=... # find all sales data for the past ... days (to calculate avg daily demand)
+    TARGET_DAYS_PREDICTION=... # number of upcoming days to predict stock demand (limit to 5 by OpenWeather)
 
-# ----- Spoilage Check Parameter -----
-DAYS_TO_EXPIRE=... # for example, if you choose 7, you will be notified if a certain product will be expired in 7 days
+    # ----- Spoilage Check Parameter -----
+    DAYS_TO_EXPIRE=... # for example, if you choose 7, you will be notified if a certain product will be expired in 7 days
 
-# ----- Automatic background Task Scheduler ----- 
-# for example: this will auto-run inventory check every 2 days, exactly at 1:15
-RUN_INVENTORY_CHECK_EVERY=2 # day based
-H_INV_CHECK=1 # hour(24-hour format: 0-23)
-M_INV_CHECK=15 # minute
+    # ----- Automatic background Task Scheduler ----- 
+    # for example: this will auto-run inventory check every 2 days, exactly at 1:15
+    RUN_INVENTORY_CHECK_EVERY=2 # day based
+    H_INV_CHECK=1 # hour(24-hour format: 0-23)
+    M_INV_CHECK=15 # minute
 
-RUN_SPOILAGE_CHECK_EVERY=... 
-H_SPOIL_CHECK=...
-M_SPOIL_CHECK=...
+    RUN_SPOILAGE_CHECK_EVERY=... 
+    H_SPOIL_CHECK=...
+    M_SPOIL_CHECK=...
 
-# ----- Spoilage Notification Alert via Telegram -----
-TELEGRAM_BOT_TOKEN=... # Secret API Token obtained from Telegram @BotFather
-TELEGRAM_CHAT_ID=... # Target Telegram chat/user ID for receiving notifications
+    # ----- Spoilage Notification Alert via Telegram -----
+    TELEGRAM_BOT_TOKEN=... # Secret API Token obtained from Telegram @BotFather
+    TELEGRAM_CHAT_ID=... # Target Telegram chat/user ID for receiving notifications
 
 
-# ---------- OpenWeather Api Setting ----------
-# create account and get the api_key from openweatherapi 
-API_KEY=...
+    # ---------- OpenWeather Api Setting ----------
+    # create account and get the api_key from openweatherapi 
+    API_KEY=...
 
-# get coordinate: go to google maps, and right click your exact location, the first row will show LAT & LON
-STORE_LAT=...
-STORE_LON=...
-```
+    # get coordinate: go to google maps, and right click your exact location, the first row will show LAT & LON
+    STORE_LAT=...
+    STORE_LON=...
+    ```
 
 3. **Install dependencies**
-* **Django:**
-```bash
-cd django/apps
-pipenv install
-```
-* **FastAPI:**
-```bash
-cd fast_api
-pipenv install
-```
+    * **Django:**
+    ```bash
+    cd django/apps
+    pipenv install
+    ```
+    * **FastAPI:**
+    ```bash
+    cd fast_api
+    pipenv install
+    ```
 
-4. **Train the ML model**
-* Open `ml_model/train_model.ipynb` in VS Code or Jupyter.
-* Select fast_api kernel
-* Click **Run All** cells to create `ml_model/weather_model.joblib`.
+4. **Apply Migrations**
+    ```bash
+    python manage.py migrate
+    ```
 
-5. **Run the services**
-* **Terminal 1 (Django):**
-```bash
-cd django/apps
-python manage.py runserver 8000
-```
-* **Terminal 2 (FastAPI):**
-```bash
-cd fast_api
-uvicorn main:app --reload --port 8001
-```
+5. **Train the ML model**
+    * Open `ml_model/train_model.ipynb` in VS Code or Jupyter.
+    * Select fast_api kernel
+    * Click **Run All** cells to create `ml_model/weather_model.joblib`.
+
+6. **Run the services**
+    * **Terminal 1 (Django):**
+    ```bash
+    cd django/apps
+    python manage.py runserver 8000
+    ```
+    * **Terminal 2 (FastAPI):**
+    ```bash
+    cd fast_api
+    uvicorn main:app --reload --port 8001
+    ```
 
 
 ### **Method 2:** Docker User Setup
@@ -134,23 +139,23 @@ uvicorn main:app --reload --port 8001
 For those who want to run the full application inside isolated containers.
 
 1. **Clone the repository**
-```bash
-git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
-cd pyproject2
-```
+    ```bash
+    git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
+    cd pyproject2
+    ```
 
 2. **Train the ML Model Locally (Required)**
-* Open `ml_model/train_model.ipynb` using Jupyter Notebook / VS Code.
-* Select fast_api kernel
-* Click **Run All** to generate `ml_model/weather_model.joblib` on your machine.
-* *(This step is required once because `.joblib` is ignored in Git and Docker needs the file present before building)*.
+    * Open `ml_model/train_model.ipynb` using Jupyter Notebook / VS Code.
+    * Select fast_api kernel
+    * Click **Run All** to generate `ml_model/weather_model.joblib` on your machine.
+    * *(This step is required once because `.joblib` is ignored in Git and Docker needs the file exist before building)*
 
 3. **Configure Environment Variables**
-* Create a `.env` file in the root directory with your secrets (same as Local setup above)
+    * Create a `.env` file in the root directory with your secrets (same as Local setup above)
 
 4. **Build and Launch Containers**
-* Run the following command in your terminal:
-```bash
-docker compose up --build
-```
-* Docker will copy the code (including the generated `weather_model.joblib`) into the container and automatically start all services.
+    * Run the following command in your terminal:
+    ```bash
+    docker compose up --build
+    ```
+    * Docker will copy the code (including the generated `weather_model.joblib`) into the container and automatically start all services.
