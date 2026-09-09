@@ -1,0 +1,58 @@
+name: Inventory test CI
+
+# 1. WHEN to run: Only when someone makes a Pull Request or Push to the main branch 
+on:
+  workflow_dispatch: # Allows to manually click "Run" in GitHub UI
+  pull_request:
+    branches: ["main"] # Only when merge to Main 
+
+jobs:
+  test:
+    # 2. WHERE to run: On a fresh Ubuntu Linux virtual machine
+    runs-on: ubuntu-latest 
+    
+    steps: #this is the "To-Do List" that the robot follows in order
+      - name: Checkout code
+        uses: actions/checkout@v4 #This tells the robot to use a pre-made tool
+      
+        # GitHub doesn't have my local .env, so we make a temporary one (so that docker-compose doesn't crash)
+      - name: Create fake temp .env
+        run: |
+          touch .env
+          echo "SECRET_KEY=ci-dummy-key-for-testing-inventory-system" >> .env
+          echo "DEBUG=True" >> .env
+          echo "ALLOWED_HOSTS=localhost,127.0.0.1,django" >> .env
+          
+          echo "DB_NAME=inventory_db" >> .env
+          echo "DB_USER=test_user" >> .env
+          echo "DB_PASSWORD=test_password_123" >> .env
+          echo "DB_HOST=db" >> .env
+          echo "DB_PORT=5432" >> .env
+          
+          echo "LOOKBACK_DAYS_SALES=2" >> .env
+          echo "TARGET_DAYS_PREDICTION=2" >> .env
+          echo "RUN_INVENTORY_CHECK_EVERY=2" >> .env
+          echo "RUN_SPOILAGE_CHECK_EVERY=2" >> .env
+          echo "H_INV_CHECK=1" >> .env
+          echo "M_INV_CHECK=0" >> .env
+          echo "H_SPOIL_CHECK=1" >> .env
+          echo "M_SPOIL_CHECK=30" >> .env
+          echo "DAYS_TO_EXPIRE=14" >> .env
+          
+          echo "TELEGRAM_BOT_TOKEN=123456789:dummy_telegram_bot_token" >> .env
+          echo "TELEGRAM_CHAT_ID=123456789" >> .env
+          
+          echo "API_KEY=dummy_weather_api_key" >> .env
+          echo "STORE_LAT=41.0082" >> .env
+          echo "STORE_LON=28.9784" >> .env
+
+      - name: Build and Run Tests
+        # 1. Build images and start services in background
+        # 2. Verify PostgreSQL is ready using the test_user from .env
+        # 3. Run Django unit tests inside the web container (exec -T reuses the running web)
+        # 4. Clean up containers and volumes when done
+        run: |
+          docker compose up -d --build
+          docker compose exec -T db pg_isready -U test_user -d inventory_db
+          docker compose exec -T web python manage.py test
+          docker compose down -v
