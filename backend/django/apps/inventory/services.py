@@ -1,0 +1,479 @@
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
+from datetime import timedelta, date, datetime
+from decimal import Decimal
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+from django.db.models.functions import Coalesce
+from django.db.models import Count, Q, F, Sum
+from asgiref.sync import sync_to_async
+from django.db.models import Subquery, OuterRef
+from django.db.models import Exists
+
+import httpx
+import os
+import logging
+
+
+class ProductService(): 
+    @staticmethod
+    def _increase_stock(product: Product, shelf_alloc): #auto-increase currect stock when new product added/patched
+        for item in shelf_alloc: 
+            shelf = item["shelf"]
+            qty = item["quantity"]
+           
+            existing_link = ProductShelf.objects.filter(product=product, shelf=shelf).first() # Check if this spesifc product-shelf link already exists in the 3rd table
+
+            if existing_link is None: # 1. if the product is not exist, we create new one
+                shelf.current_stock += qty # add with whatever the quantity user put
+
+                ProductShelf.objects.create(
+                    product=product,
+                    shelf=shelf,
+                    quantity=qty
+                )
+                shelf.save()
+            
+            else: # 2. if the product link already exist, we do Patch
+                qty_diff = qty - existing_link.quantity # new qty typed - old qty from DB
+                shelf.current_stock += qty_diff # update the value in shelf table
+                shelf.save()
+
+                existing_link.quantity = qty # update value in ProductShelf table
+                existing_link.save()
+                
+
+    @staticmethod
+    def save_product(product: Product | None=None, **kwargs):
+
+        # receive the raw kwargs package and filter out None value
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+        shelf_alloc = clean_kwargs.get("shelf_allocations")
+        if shelf_alloc is None and product: # fallback if shelf_allocation field empty in patch
+            shelf_alloc = [
+                {"shelf": ps.shelf, "quantity": ps.quantity}
+                for ps in product.shelf_allocations.all()
+            ]
+        
+        # Validation 1
+        if shelf_alloc:
+            for item in shelf_alloc: # unpack the payload (it's a list of dictionaries)
+                shelf = item["shelf"]
+                qty = item["quantity"]
+
+                # 2 lines below is to handle when patching (when PATCH we need true available space, not user input quantity like when POST)
+                existing_link = ProductShelf.objects.filter(product=product, shelf=shelf).first() if product else None
+                old_qty = existing_link.quantity if existing_link else 0
+
+                available_space = (shelf.max_shelf_capacity - shelf.current_stock) + old_qty
+                if qty > available_space:
+                    raise ValidationError(f"Can't fit {qty} units on shelf id '{shelf.id}', space remaining: {available_space} ")
+
+        # Validation 2
+        selling_price = clean_kwargs.get("selling_price") or (product.selling_price if product else 0)
+        unit_cost = clean_kwargs.get("unit_cost") or (product.unit_cost if product else 0)
+        if selling_price and unit_cost:
+            if selling_price < unit_cost:
+                raise ValidationError("Selling price cannot be lower than unit cost (negative profit margin)")
+            
+        # Validation 3
+        expire_date = clean_kwargs.get("expire_date") or (product.expire_date if product else None)
+        if expire_date and expire_date <= timezone.localdate():
+            raise ValidationError("Cannot add or update product with an expiration date in the past")
+        
+        # Validation 4
+        if shelf_alloc:
+
+            name = clean_kwargs.get("name") or (product.name if product else None)
+            target_shelf = [item["shelf"] for item in shelf_alloc] # unpack with list comprehensive
+
+            existing_name = Product.objects.filter(name__iexact=name, shelves__in=target_shelf) #Case-insensitive check
+
+            if product: # Only exclude if product actually exists btw
+                existing_name = existing_name.exclude(id=product.id) # "Look for other products with this name, but ignore the product I am currently editing"
+            if existing_name.exists():
+                raise ValidationError(f"A product named '{name}' already exists on this shelf")
+
+        # M2M Validations
+        total_qty = clean_kwargs.get("quantity") or (product.quantity if product else 0)
+        if shelf_alloc is not None:
+            # Validation 5
+            if len(shelf_alloc) == 0:
+                raise ValidationError("Product must be assigned to at least one shelf.")
+
+            # Validation 6
+            qty_pershelf = [item.get("quantity", 0) for item in shelf_alloc] #safely return 0
+            if total_qty != sum(qty_pershelf):
+                raise ValidationError(f"The total quantity of a product ({total_qty}) must match the number of product to be assign in each shelves")
+            
+
+        # pop the custom field out, bcoz Product model dont have this field (this belong to 3rd table)
+        allocations_data = clean_kwargs.pop("shelf_allocations", None)
+
+        if product:
+            for key, value in clean_kwargs.items():   # Step 1: Loop through all valued fields from clean kwargs
+                setattr(product, key, value)          # Step 2: Assign the valued field directly to the object (product.field = value)
+        else:
+            product = Product(**clean_kwargs)
+
+        product.save() # save product first so it gets a database ID for the 3rd table
+
+        if allocations_data:
+            ProductService._increase_stock(product=product, shelf_alloc=allocations_data)
+            
+        product.save()
+        return product
+    
+
+    @staticmethod
+    def delete_product(product: Product):
+
+        prod_shelf = product.shelf_allocations.all() # return queryset, not list of dict
+        for item in prod_shelf:
+            # decrease obj in shelf table with obj in product table
+            item.shelf.current_stock -= item.quantity 
+            item.shelf.save()
+
+            # ensure the quantity will set to 0 when gets deleted
+            item.quantity = 0
+            item.save()
+
+        product.is_deleted = True # mark with soft delete
+        product.save()
+        return product
+
+
+class ShelfService():
+
+    @staticmethod
+    def save_shelf(shelf: Shelf | None=None, **kwargs):
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+        if shelf and shelf.max_shelf_capacity < shelf.current_stock:
+            raise ValidationError(f"Cannot change the max capacity to be lower than current stock ({shelf.current_stock})")
+
+        if shelf:
+            for key, value in clean_kwargs.items():      
+                setattr(shelf, key, value)         
+        else:
+            shelf = Shelf(**clean_kwargs)
+
+        shelf.save()
+        return shelf
+
+
+class SalesService():
+    @staticmethod
+    def _decrease_stock(sales: Sales): # auto-decrease quantity and currect stock when sales triggered
+
+        # feature: automatically switch the to another shelf if one shelf (that carries a spesific prod) is empty
+        quantity_wanted = sales.quantity_sold
+
+        for alloc in sales.product.shelf_allocations.order_by("id"):  # access all shelves where this spesific product located and order by ID
+            if quantity_wanted <= 0:
+                break
+
+            # when enough stock. It deducts quantity_wanted, sets it to = 0, updates Shelf #1, and on the next loop, bcoz now quantity_wanted <= 0 it triggers break in next iteration
+            if alloc.quantity >= quantity_wanted: # when first shelf is enough, stop it
+                alloc.quantity -= quantity_wanted
+                alloc.shelf.current_stock -= quantity_wanted
+                quantity_wanted = 0
+
+            # user ask 50q product A, prod A spread across s1=10, s2=15, s3=15, s4=20.. it drains shelf 1,2,3 and left shelf 4 with 10
+            else:
+                quantity_wanted -= alloc.quantity
+                alloc.shelf.current_stock -= alloc.quantity # deducts ONLY Product A's count from the total capacity of that shelf
+                alloc.quantity = 0 # emptied Prod A from shelf 1,2,3 (4 has remaining)
+
+            alloc.shelf.save()
+            alloc.save()
+            print(f"Shelf ID {alloc.shelf.id} remaining stock for product: {alloc.quantity}") #show result in terminal for debugging
+
+        sales.product.quantity -= sales.quantity_sold # decrease total quantity of a product (generally, not divided by shelves)
+        sales.product.save()
+        return sales
+
+
+    @staticmethod
+    def save_sales(**kwargs):
+        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+        product = clean_kwargs.get("product") 
+        quantity_sold = clean_kwargs.get("quantity_sold", 0)
+
+        if product and (quantity_sold > product.quantity): # use quantity bcoz it represent all quanty of a product, if i use shelf make no sense, bcoz a prod can be in multip shelfs
+            raise ValidationError(f"Not enough stock for {product.name}. Remaining stock: {product.quantity} ")
+
+        if quantity_sold <= 0:
+            raise ValidationError("Quantity sold must be greater than zero.")
+        
+        if product and product.expire_date <= timezone.localdate():
+            raise ValidationError("Cannot sell expired products.")
+
+        # Instantiate in RAM, dont save directly by 'Sales.object.create'
+        sales = Sales(**clean_kwargs) 
+
+        # logic to auto-create 'total_revenue' field
+        if sales:
+            sales.total_revenue = quantity_sold * sales.product.selling_price
+        else:
+            sales.total_revenue = Decimal("0")
+
+        sales.save() # save first before decrease it
+
+        SalesService._decrease_stock(sales=sales)
+            
+        return sales
+
+
+class OrderPredictionService():
+
+    @staticmethod
+    async def fetch_single_prediction(product:Product):
+        """ Sends a single product data to FastAPI and returns the prediction numbers. """
+
+        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
+        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+
+        if lookback_days_sales < 1:
+            raise ValidationError("Cannot lookback the sales data happened less than 1 day")
+        if target_days_prediction < 1:
+            raise ValidationError("Target days prediction must be at least 1 day.")
+        if target_days_prediction > 5:
+            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
+
+        # FastAPI URL endpoint
+        # will automatically switch to docker DNS if run by docker
+        fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001") # in docker, "os.getenv" will refer to env section in d-compose 
+        url = f"{fastapi_host}/api/predict-single"
+
+        # find out how many product is sold based on each different types in the last ... days
+        demand = await Sales.objects \
+            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback_days_sales)) \
+            .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
+
+        # Request data to be sent to Fast api
+        payload = {
+            "product_id": product.id,
+            "product_type": product.type,
+            "base_demand": int(demand["base_demand"] / lookback_days_sales), # divide by ... to get daily baseline
+            "current_stock": int(product.quantity) if product else 0, # explicitly, bcoz from a web form, they usually come in as strings
+            "target_days_prediction": int(target_days_prediction)
+        }
+
+        try:
+            async with httpx.AsyncClient() as client: # 1 call = 1 connection setup per product
+                response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
+            
+            if response.status_code == 200:
+                # 1.save to DB (Convert raw JSON text into db rows directly)
+                prediction_obj = await OrderPrediction.objects.acreate( # use async create method (acreate)
+                    product=product,
+                    demand_prediction=response.json()["predicted_demand"],
+                    order_suggestion=response.json()["suggested_order"],
+                    target_timing=timezone.localdate() + timedelta(days=target_days_prediction)
+                )
+
+                # 2.Return a dictionary so ai_data.get() can works in views
+                return {
+                    "predicted_demand": prediction_obj.demand_prediction,
+                    "suggested_order": prediction_obj.order_suggestion
+                }
+            return None
+        
+        except Exception as e:
+            print(f"Error in single prediction: {str(e)}")
+            return None
+
+
+    @staticmethod 
+    async def fetch_batch_prediction():
+        """ Sends all products data to FastAPI and returns the prediction numbers. """
+
+        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
+        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+
+        if lookback_days_sales < 1:
+            raise ValidationError("Cannot lookback the sales data happened less than 1 day")
+        if target_days_prediction < 1:
+            raise ValidationError("Target days prediction must be at least 1 day.")
+        if target_days_prediction > 5:
+            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
+
+        # FastAPI URL endpoint
+        fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")  # will automatically switch to docker DNS if run by docker
+        url = f"{fastapi_host}/api/predict-batch"
+
+        payload = [] # hold 'list' of data to be sent out to Fast Api
+        
+        # Inner Query: find out how much this product is sold in the last ... days (iterate each diff pk)
+        # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
+        sales_subquery = Sales.objects \
+            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
+            .values('total') # 'values' at the end is to hand back result and throw away other columns from Sales
+
+        # Outer Query: For every product, run the inner sales_subquery. If it returns NULL, force it to 0, and attach that number to the product under name "base_demand"
+        products = Product.objects \
+            .filter(is_deleted=False) \
+            .annotate(base_demand=Coalesce(Subquery(sales_subquery), 0)) # Coalesce handles NULL when no sales happen yet for a product
+
+        async for product in products:
+            # Request data to be sent to Fast api (Stored in Dictionary)
+            payload.append({
+                "product_id": product.id,
+                "product_type": product.type, 
+                "base_demand": int(product.base_demand / lookback_days_sales), # divide by ... to get daily baseline  #type:ignore
+                "current_stock": int(product.quantity), 
+                "target_days_prediction": int(target_days_prediction)
+            })
+
+        # WRAP IT in a Dict to macth BatchPredictionRequest in main.py
+        custom_payload = {
+            "target_days_prediction": int(target_days_prediction),
+            "requests_list": payload,
+        }
+            
+        try: #safely catch any error happened inside try block
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=custom_payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
+            
+            if response.status_code == 200:
+                new_records = [
+                    OrderPrediction( # Stored in Model Instance
+                        product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
+                        demand_prediction = item["predicted_demand"], 
+                        order_suggestion = item["suggested_order"],
+                        target_timing = timezone.localdate() + timedelta(days=target_days_prediction)
+                    )
+                    # LOOP COMPREHENSIVE. It loops through all prediction dict returned by FastAPI
+                    for item in response.json() 
+                ]
+
+                # WRAP DB SAVE IN sync_to_async TO FIX Async Context Error
+                if new_records:
+                    await sync_to_async(OrderPrediction.objects.bulk_create)(new_records)
+
+                return {"total_processed": len(new_records)}
+
+            return {"total_processed": 0, "error": f"FastAPI error: {response.status_code}"}
+        
+        except Exception as e:
+            print(f"Error in batch prediction: {str(e)}")
+            return {"total_processed": 0, "error": "Connection failed"} # skipped error part and goes to next
+
+
+
+class SpoilageNotificationService():
+    @staticmethod
+    async def check_spoilage():
+
+        notifications_count = 0
+        notif_list = []
+        show_result = []
+
+        # 1st inner query
+        # fetch latest prediction for this prod (a product could have multiple prediction history bcoz it run every few days)
+        prediction_subquery = OrderPrediction.objects \
+            .filter(product=OuterRef('pk')) \
+            .order_by('-id') \
+            .values('demand_prediction')[:1] # refer to newest ID from that spesific product (in exchange to sort by created_at)
+
+        # 2nd inner query: Check if an unread notification already exists for this product (no need to show same thing)
+        notif_subquery = SpoilageNotification.objects.filter(
+            product=OuterRef('pk'), # "Find any unread notification where the product matches the outer product's ID"
+            is_read=False
+        )
+
+        # Outer query
+        days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
+        almost_expired_prod = Product.objects \
+            .filter(expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), is_deleted=False) \
+            .annotate(
+                demand_pred=Coalesce(Subquery(prediction_subquery), 0),
+                has_unread_notif=Exists(notif_subquery)
+            )
+
+        # loop through each expiring product
+        async for prod in almost_expired_prod:
+            # each leftover stock of these expiring prod
+            stock_left = prod.quantity
+
+            spoilage_risk = stock_left - prod.demand_pred #type:ignore
+            
+            if spoilage_risk <= 0:# Stock will be sold out before expired (No alert needed) 
+                continue 
+            else: # Spoilage risk detected!
+                # no need 
+                if not prod.has_unread_notif: #type:ignore
+                    notif_list.append(
+                        SpoilageNotification( # Stored in Model Instance, not dict
+                            product = prod,
+                            level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
+                            message = (
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {prod.demand_pred}. " #type:ignore
+                                f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
+                            )
+                        )
+                    )
+                    notifications_count += 1
+
+                    show_result.append({ # indent to this level so it only run when there new spoilage fouund
+                        "product_id": prod.id,
+                        "product_name": prod.name,
+                        "spoilage_risk": spoilage_risk,
+                        "level": SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
+                    })
+
+        if notif_list:
+            # 1. bulk save to DB
+            await SpoilageNotification.objects.abulk_create(notif_list) 
+
+            # 2. Build phone notification message
+            msg = (
+                f"🚨 <b>Spoilage Alert Triggered!</b>\n"
+                f"Created <b>{len(notif_list)}</b> new warning alerts.\n\n"
+            )
+            
+            # Add up to 5 items so the lock screen stays clean
+            for item in show_result[:5]:
+                msg += f"• <b>{item['product_name']}</b>: Risk of {item['spoilage_risk']} units\n"
+
+            # 3. Send straight to Telegram lock screen
+            await TelegramBot.send_alert(msg)
+
+        return {
+            "notif_count": f"Spoilage check completed. {notifications_count} new alerts created.",
+            "result": show_result if notifications_count>0 else "No new potential spoilage found, please check inbox to see previous notifications created."
+        }
+
+
+
+# logging records events quietly. It writes a message to a background log file or server console without stopping the code like in "raise"
+logger = logging.getLogger(__name__)
+
+class TelegramBot():
+    @staticmethod
+    async def send_alert(message: str):
+        """Sends an async message to Telegram account using HTTPX"""
+
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", None)
+        chat_id = os.getenv("TELEGRAM_CHAT_ID", None)
+        if not bot_token or not chat_id:
+            logger.warning("Telegram Bot Token or Chat ID is missing.")
+            return False
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(url, json=payload)
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Failed to send Telegram alert: {e}")
+            return False
