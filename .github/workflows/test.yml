@@ -49,10 +49,10 @@ jobs:
       - name: Build and Run Tests
         # 1. Build images and start services in background
         # 2. Verify PostgreSQL is ready using the test_user from .env
-        # 3. Run Django unit tests inside the web container (exec -T reuses the running web)
+        # 3. Run Django unit tests inside the django container (exec -T reuses the running django)
         # 4. Clean up containers and volumes when done
         run: |
           docker compose up -d --build
           docker compose exec -T db pg_isready -U test_user -d inventory_db
-          docker compose exec -T web python manage.py test
+          docker compose exec -T django python manage.py test
           docker compose down -v
