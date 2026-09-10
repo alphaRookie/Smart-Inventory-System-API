@@ -29,3 +29,10 @@ celerybeat-schedule*
 
 # Redis database snapshots
 *.rdb
+
+# Frontend / Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.log
