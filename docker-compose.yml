@@ -28,7 +28,7 @@ services:
   django:
     build:
       context: . # tells Docker to look at the root folder (as starting point)
-      dockerfile: ./django/Dockerfile # need to specify build path bcoz we have separated Dockerfile for each framework
+      dockerfile: ./backend/django/Dockerfile # need to specify build path bcoz we have separated Dockerfile for each framework
     container_name: inventory-django
     restart: unless-stopped
     ports:
@@ -49,7 +49,7 @@ services:
   fastapi:
     build:
       context: .
-      dockerfile: ./fast_api/Dockerfile
+      dockerfile: ./backend/fast_api/Dockerfile
     container_name: inventory-fastapi
     restart: unless-stopped
     ports:
@@ -57,7 +57,7 @@ services:
     env_file: 
       - .env
     volumes: # FastAPI needs access to "weather_model.joblib", which is generated locally and ignored by Git. Mounting "./ml_model:/app/ml_model" creates a direct window to your local machine's model folder.
-      - ./ml_model:/app/ml_model
+      - ./backend/ml_model:/app/ml_model
     depends_on:
       - redis # no need to wait db bcoz fast_api dont interact with it
 
