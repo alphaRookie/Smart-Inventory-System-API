@@ -48,11 +48,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'inventory.apps.InventoryConfig',
-    'drf_spectacular'
+    'drf_spectacular',
+    'corsheaders',
     # celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -176,3 +178,14 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+
+
+# -------------------- set-up CORS --------------------
+
+cors_origins_raw = os.getenv(
+    "CORS_ALLOWED_ORIGINS", 
+    "http://localhost:5173,http://127.0.0.1:5173"
+)
+# cleans up accidental spaces and trailing commas
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
