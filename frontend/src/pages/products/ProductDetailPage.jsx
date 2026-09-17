@@ -44,12 +44,13 @@ export default function ProductDetailPage() {
   return (
     <div style={{ padding: '20px', maxWidth: '600px' }}>
       {/* SPA Navigation back to main list view without reloading browser tab */}
-      <Link to="/products">⬅ Back to Products</Link>
+      <Link to="/products">⬅ Back to Product List</Link>
       
       <h2>{product.name}</h2>
 
       {/* Button to toggle edit mode on and off */}
-      <button onClick={() => setIsEditing(!isEditing)} style={{ marginBottom: '15px' }}>
+      {/* if now in edit mode (isEditing=true), show 'Cancel Edit' and set to 'false' to close form . Otherwise show 'Edit Product' */}
+      <button onClick={() => setIsEditing(isEditing ? false : true)} style={{ marginBottom: '15px' }}> 
         {isEditing ? 'Cancel Edit' : 'Edit Product'}
       </button>
 
@@ -58,7 +59,7 @@ export default function ProductDetailPage() {
         /* Reuses existing ProductForm component with initialData pre-filled */
         <ProductForm 
           shelves={shelves} 
-          initialData={product} 
+          initialData={product} /* referring to that spesific product when PATCH */
           onSuccess={handleUpdateSuccess} 
         />
       ) : (

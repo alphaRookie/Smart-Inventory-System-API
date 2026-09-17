@@ -33,17 +33,17 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
     }
   }, [initialData]);
 
-  // Extracts selected shelf IDs from multi-select options, keeps existing quantities if already selected, or sets default quantity: 1 for new selections
+  // Handle selecting from Dropdowns
   const handleShelfSelect = (e) => {
-    const selectedIds = Array.from(e.target.selectedOptions, (opt) => Number(opt.value));
-    const updatedAllocations = selectedIds.map((id) => {
-      const existing = formData.shelf_allocations.find((item) => item.shelf === id);
-      return existing || { shelf: id, quantity: 1 };
+    const selectedIds = Array.from(e.target.selectedOptions, (opt) => Number(opt.value)); // 1. Grab all options the user held Ctrl/Cmd to select
+    const updatedAllocations = selectedIds.map((id) => { // 2. Build the new shelf_allocations array
+      const existing = formData.shelf_allocations.find((item) => item.shelf === id); // Check if this shelf was already selected before
+      return existing || { shelf: id, quantity: 1 }; // Keep its existing quantity if it existed, or start at quantity: 1 if it's new
     });
     setFormData({ ...formData, shelf_allocations: updatedAllocations });
   };
 
-  // Updates individual shelf quantity values inside the shelf_allocations array
+  // Updates quantity for that spesific shelf
   const handleShelfQtyChange = (shelfId, qty) => {
     const updatedAllocations = formData.shelf_allocations.map((item) => 
       item.shelf === shelfId ? { ...item, quantity: Number(qty) } : item
