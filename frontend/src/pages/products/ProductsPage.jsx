@@ -50,9 +50,9 @@ export default function ProductsPage() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '600px' }}>
-      <h2>Products Management</h2>
+      <h2>Product Management</h2>
 
-      {/* ADD BUTTON */}
+      {/* Add Button */}
       {!showForm && (
         <button 
           onClick={handleOpenAddForm} 
@@ -62,7 +62,7 @@ export default function ProductsPage() {
         </button>
       )}
 
-      {/* CREATE FORM DISPLAY */}
+      {/* Create Form Display */}
       {showForm && (
         <div style={{ border: '2px solid #007bff', padding: '15px', borderRadius: '6px', marginBottom: '20px', backgroundColor: '#f9f9f9' }}>
           <ProductForm 
@@ -81,9 +81,9 @@ export default function ProductsPage() {
 
       <hr style={{ margin: '20px 0' }} />
 
-      {/* PRODUCT LIST */}
-      <h3>Product List ({products.length})</h3>
-      {products.map((product) => (
+      {/* Product List */}
+      <h3>Product List ({products.length})</h3> 
+      {products.map((product) => ( /* Loops over every product object in the state and renders a <ProductCard> card for each one */
         <ProductCard 
           key={product.id} 
           product={product} 

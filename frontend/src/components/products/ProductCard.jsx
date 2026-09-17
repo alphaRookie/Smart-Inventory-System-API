@@ -8,6 +8,8 @@ export default function ProductCard({ product, onDelete }) { // these 2 are prop
   const [isDeleting, setIsDeleting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const isDeleted = product.is_deleted; 
   
   const handleDelete = async () => { // This fills the 'deletedId' parameter in ProductsPage
     try { 
@@ -29,9 +31,21 @@ export default function ProductCard({ product, onDelete }) { // these 2 are prop
     setErrorMsg(''); // Reset error when modal closes
   };
 
+
   return (
-    <div style={{ border: '1px solid #ccc', padding: '15px', marginBottom: '10px', borderRadius: '5px' }}>
-      <strong>{product.id} - {product.name}</strong> - ${product.selling_price} (Stock: {product.quantity})
+    <div style={{ 
+      border: '1px solid #ccc', 
+      padding: '15px', 
+      marginBottom: '10px', 
+      borderRadius: '5px',
+      // Style it as greyed-out if deleted
+      backgroundColor: isDeleted ? '#242323' : '#e9e9e9',
+      opacity: isDeleted ? 0.6 : 1
+    }}>
+
+      <strong style={{ textDecoration: isDeleted ? 'line-through' : 'none' }}>
+        {product.id} - {product.name}
+      </strong> - ${product.selling_price} (Stock: {product.quantity})
       
       <div style={{ marginTop: '5px', display: 'flex', gap: '5px' }}>
 
@@ -45,7 +59,7 @@ export default function ProductCard({ product, onDelete }) { // these 2 are prop
           <div className="modal-content">
             <p>Are you sure you want to delete this?</p>
             {errorMsg && <p style={{ color: 'red', margin: '10px 0' }}>{errorMsg}</p>}
-            <button onClick={handleDelete} disabled={isDeleting}> {/* when click 'confirm' it returns true */}
+            <button onClick={handleDelete} disabled={isDeleting} > {/* when click 'confirm' it returns true */}
               {isDeleting ? "Deleting..." : "Confirm"} {/* Button shows "Deleting..." & becomes disable until API call finished */}
             </button>
             <button onClick={handleCloseModal} disabled={isDeleting}>Cancel</button>
