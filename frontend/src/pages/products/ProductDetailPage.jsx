@@ -38,60 +38,94 @@ export default function ProductDetailPage() {
     setIsEditing(false);        // closes edit form and returns to read-only view
   };
 
-  if (loading) return <div>Loading product details...</div>;
-  if (!product) return <div>Product not found.</div>;
+  if (loading) return <div className="text-gray-500 font-medium p-4">Loading product details...</div>;
+  if (!product) return <div className="text-red-500 font-medium p-4">Product not found.</div>;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px' }}>
-      {/* SPA Navigation back to main list view without reloading browser tab */}
-      <Link to="/products">⬅ Back to Product List</Link>
+    <div className="max-w-3xl space-y-6">
       
-      <h2>{product.name}</h2>
+      {/* SPA Navigation back to main list view without reloading browser tab */}
+      <Link to="/products" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+        ⬅ Back to Product List
+      </Link>
 
-      {/* Button to toggle edit mode on and off */}
-      {/* if now in edit mode (isEditing=true), show 'Cancel Edit' and set to 'false' to close form . Otherwise show 'Edit Product' */}
-      <button onClick={() => setIsEditing(isEditing ? false : true)} style={{ marginBottom: '15px' }}> 
-        {isEditing ? 'Cancel Edit' : 'Edit Product'}
-      </button>
+      {/* Header and Toggle Edit Button */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+        <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
+        
+        {/* Button to toggle edit mode on and off */}
+        <button 
+          onClick={() => setIsEditing(!isEditing)} 
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            isEditing 
+              ? 'bg-gray-200 hover:bg-gray-300 text-gray-800' 
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+          }`}
+        > 
+          {isEditing ? 'Cancel Edit' : 'Edit Product'}
+        </button>
+      </div>
 
       {/* Conditional Rendering: Render form component if editing, else show product details */}
       {isEditing ? (
         /* Reuses existing ProductForm component with initialData pre-filled */
-        <ProductForm 
-          shelves={shelves} 
-          initialData={product} /* referring to that spesific product when PATCH */
-          onSuccess={handleUpdateSuccess} 
-        />
+        <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md">
+          <ProductForm 
+            shelves={shelves} 
+            initialData={product} /* referring to that specific product when PATCH */
+            onSuccess={handleUpdateSuccess} 
+          />
+        </div>
       ) : (
         /* Read-Only Product Details Display */
-        <div style={{ background: '#f9f9f9', padding: '15px', borderRadius: '5px' }}>
-          <p><strong>Product ID:</strong> {product.id}</p>
-          <p><strong>Type:</strong> {product.type}</p>
-          <p><strong>Quantity in Stock:</strong> {product.quantity}</p>
-          <p><strong>Unit Cost:</strong> ${product.unit_cost}</p>
-          <p><strong>Selling Price:</strong> ${product.selling_price}</p>
-          <p><strong>Expire Date:</strong> {product.expire_date}</p>
-          <p><strong>Remaining Shelf Life:</strong> {product.shelf_life} days</p>
-          <p><strong>Deleted:</strong> {product.is_deleted ? 'Yes' : 'No'} </p>
-          <p><strong>Status:</strong> {product.is_expired ? 'Expired ❌' : 'Good ✅'}</p>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-6">
+          
+          {/* Key Attributes Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <p><span className="font-semibold text-gray-700">Product ID:</span> {product.id}</p>
+            <p><span className="font-semibold text-gray-700">Type:</span> {product.type}</p>
+            <p><span className="font-semibold text-gray-700">Quantity in Stock:</span> {product.quantity}</p>
+            <p><span className="font-semibold text-gray-700">Unit Cost:</span> ${product.unit_cost}</p>
+            <p><span className="font-semibold text-gray-700">Selling Price:</span> ${product.selling_price}</p>
+            <p><span className="font-semibold text-gray-700">Expire Date:</span> {product.expire_date}</p>
+            <p><span className="font-semibold text-gray-700">Remaining Shelf Life:</span> {product.shelf_life} days</p>
+            <p><span className="font-semibold text-gray-700">Deleted:</span> {product.is_deleted ? 'Yes' : 'No'}</p>
+            
+            {/* Status Pill */}
+            <div className="flex items-center gap-2 col-span-1 md:col-span-2 mt-2">
+              <span className="font-semibold text-gray-700">Status:</span>
+              <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                product.is_expired 
+                  ? 'bg-red-100 text-red-800' 
+                  : 'bg-green-100 text-green-800'
+              }`}>
+                {product.is_expired ? 'Expired ❌' : 'Good ✅'}
+              </span>
+            </div>
+          </div>
 
-          <hr style={{ margin: '15px 0' }} />
+          <hr className="border-gray-200" />
 
           {/* Render nested shelf_allocations array */}
-          <h4>Shelf Allocations:</h4>
-          {product.shelf_allocations?.length > 0 ? (
-            <ul>
-              {product.shelf_allocations.map((alloc, idx) => (
-                <li key={idx}>
-                  Shelf #{alloc.shelf}: <strong>{alloc.quantity} units</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p style={{ color: '#777' }}>No shelves assigned yet.</p>
-          )}
+          <div>
+            <h3 className="text-base font-semibold text-gray-800 mb-3">Shelf Allocations</h3>
+            {product.shelf_allocations?.length > 0 ? (
+              <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+                {product.shelf_allocations.map((alloc, idx) => (
+                  <li key={idx} className="p-3 bg-gray-50 flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Shelf #{alloc.shelf}</span>
+                    <span className="font-bold text-gray-800">{alloc.quantity} units</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 italic">No shelves assigned yet.</p>
+            )}
+          </div>
+
         </div>
       )}
+
     </div>
   );
 }

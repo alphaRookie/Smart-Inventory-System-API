@@ -46,25 +46,34 @@ export default function ProductsPage() {
     setProducts(products.filter((p) => p.id !== deletedId));
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return <div className="text-gray-500 font-medium p-4">Loading products...</div>;
+  }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px' }}>
-      <h2>Product Management</h2>
+    <div className="max-w-4xl space-y-6">
+      
+      {/* Page Header & Action Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage your inventory stock and shelf placements.</p>
+        </div>
 
-      {/* Add Button */}
-      {!showForm && (
-        <button 
-          onClick={handleOpenAddForm} 
-          style={{ marginBottom: '20px', padding: '8px 16px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px' }}
-        >
-          + Add New Product
-        </button>
-      )}
+        {/* Add Button */}
+        {!showForm && (
+          <button 
+            onClick={handleOpenAddForm} 
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+          >
+            + Add New Product
+          </button>
+        )}
+      </div>
 
-      {/* Create Form Display */}
+      {/* Create Form Display Card */}
       {showForm && (
-        <div style={{ border: '2px solid #007bff', padding: '15px', borderRadius: '6px', marginBottom: '20px', backgroundColor: '#f9f9f9' }}>
+        <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md space-y-4">
           <ProductForm 
             shelves={shelves} 
             initialData={null} // Always null since this page only creates new products
@@ -72,25 +81,33 @@ export default function ProductsPage() {
           />
           <button 
             onClick={() => setShowForm(false)} 
-            style={{ marginTop: '10px', backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px' }}
+            className="w-full sm:w-auto bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded transition-colors"
           >
             Cancel
           </button>
         </div>
       )}
 
-      <hr style={{ margin: '20px 0' }} />
+      {/* Product List Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Product List ({products.length})
+          </h2>
+        </div>
 
-      {/* Product List */}
-      <h3>Product List ({products.length})</h3> 
-      {products.map((product) => ( /* Loops over every product object in the state and renders a <ProductCard> card for each one */
-        <ProductCard 
-          key={product.id} 
-          product={product} 
-          onDelete={handleDelete}
-        />
-      ))}
-      
+        {/* Product List Grid */}
+        <div className="grid grid-cols-1 gap-4">
+          {products.map((product) => ( /* Loops over every product object in the state and renders a <ProductCard> card for each one */
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
