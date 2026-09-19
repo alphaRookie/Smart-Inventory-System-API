@@ -8,7 +8,7 @@ export default function ProductsPage() {
   const [shelves, setShelves] = useState([]);
   const [loading, setLoading] = useState(true); // Tracks if data is still downloading. Starts as true
 
-  const [showForm, setShowForm] = useState(false); // Controls form visibility for creating new products
+  const [showForm, setShowForm] = useState(false); // Controls create form modal/card
 
   // Triggers 'fetchInitialData' when page loads
   useEffect(() => {
@@ -46,9 +46,11 @@ export default function ProductsPage() {
     setProducts(products.filter((p) => p.id !== deletedId));
   };
 
-  if (loading) {
-    return <div className="text-gray-500 font-medium p-4">Loading products...</div>;
-  }
+  // Toggle to hide/unhide deleted products
+  const [hideDeletedProd, setHideDeletedProd] = useState(false); 
+  const visibleProducts = hideDeletedProd ? products.filter((p) => !p.is_deleted) : products; // if true, hide deleted prod --- if false, show deleted prod
+
+  if (loading) {return <div className="text-gray-500 font-medium p-4">Loading products...</div>;}
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -64,7 +66,7 @@ export default function ProductsPage() {
         {!showForm && (
           <button 
             onClick={handleOpenAddForm} 
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
           >
             + Add New Product
           </button>
@@ -92,13 +94,20 @@ export default function ProductsPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-gray-200 pb-2">
           <h2 className="text-lg font-semibold text-gray-800">
-            Product List ({products.length})
+            Product List ({visibleProducts.length})
           </h2>
+
+          <button 
+            onClick={() => setHideDeletedProd(!hideDeletedProd)} /* button that triggers to unhide (also hide --bcoz React handles both states with a ! toggle) */
+            className="border px-3 py-1 rounded text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium"
+          >
+            {hideDeletedProd ? 'Show All Products' : 'Hide Deleted Products'}
+          </button>
         </div>
 
-        {/* Product List Grid */}
+        {/* Product Cards Grid */}
         <div className="grid grid-cols-1 gap-4">
-          {products.map((product) => ( /* Loops over every product object in the state and renders a <ProductCard> card for each one */
+          {visibleProducts.map((product) => ( /* Loops over every product object in the state and renders a <ProductCard> card for each one */
             <ProductCard 
               key={product.id} 
               product={product} 
