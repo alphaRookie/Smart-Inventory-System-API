@@ -130,13 +130,16 @@ class ProductService():
 
         prod_shelf = product.shelf_allocations.all() # return queryset, not list of dict
         for item in prod_shelf:
-            # decrease obj in shelf table with obj in product table
+            # decrease obj in shelf table based on how much leftover product quantity
             item.shelf.current_stock -= item.quantity 
             item.shelf.save()
 
-            # ensure the quantity will set to 0 when gets deleted
+            # Reset individual shelf allocation quantity to 0 AND save inside the loop
             item.quantity = 0
             item.save()
+
+        # ensure the quantity will set to 0 when gets deleted
+        product.quantity = 0
 
         product.is_deleted = True # mark with soft delete
         product.save()
