@@ -35,9 +35,9 @@ export default function ProductsPage() {
     setShowForm(true);
   };
 
-  // State handler for creating a product (POST only)
-  const handleFormSuccess = (newProduct) => {
-    setProducts([...products, newProduct]); // Appends newProduct to products array using spread operator (...)
+  // State handler auto-run after POST/PATCH a product (no need to refresh page to see result)
+  const handleFormSuccess = async () => {
+    await fetchInitialData(); // Re-fetch from the API so backend calculated fields can automatically run 
     setShowForm(false); // Close form after successful creation
   };
 
