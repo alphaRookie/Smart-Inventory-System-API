@@ -12,26 +12,34 @@ class ProductShelfSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer): 
     # Why did i create shelf_allocations?
     # To allow the user to split 1 product across multiple shelves (e.g., 50 units on Shelf 1, 30 units on Shelf 2)
-    shelf_allocations = ProductShelfSerializer(
-        many=True, 
-        required=False
-    )
+    shelf_allocations = ProductShelfSerializer(many=True, required=False)
     class Meta: 
         model = Product
         fields = ["id", "name", "type", "expire_date", "shelf_life", "quantity", "shelf_allocations", "unit_cost", "selling_price", "is_deleted", "is_expired"] # replace 'shelves' field with 'shelf_allocations'
         read_only_fields = ["id", "shelf_life", "is_expired"]
+
+
+# a serializer reverse version of shelf_allocation
+# Note: bcoz "shelf_allocations" already handle WRITE, so "product_allocations" can access reverse relation of it without need WRITE anymore
+class ShelfProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductShelf
+        fields = ["product", "quantity"]
+        depth = 1 # so "product" can be access as obj, not just id 
+
+class ShelfSerializer(serializers.ModelSerializer): 
+    product_allocations = ShelfProductSerializer(many=True, read_only=True)
+    class Meta: 
+        model = Shelf
+        fields = ["id", "category", "current_stock", "max_shelf_capacity", "product_allocations"]
+        read_only_fields = ["id", "current_stock", "product_allocations"] # the reverse MUST BE read_only !
+
 
 class SalesSerializer(serializers.ModelSerializer): 
     class Meta: 
         model = Sales
         fields = ["id", "created_at", "product", "quantity_sold", "total_revenue"]
         read_only_fields = ["id", "total_revenue"]
-
-class ShelfSerializer(serializers.ModelSerializer): 
-    class Meta: 
-        model = Shelf
-        fields = ["id", "category", "current_stock", "max_shelf_capacity"]
-        read_only_fields = ["id", "current_stock"]
 
 class OrderPredictionSerializer(serializers.ModelSerializer): 
     class Meta: 
