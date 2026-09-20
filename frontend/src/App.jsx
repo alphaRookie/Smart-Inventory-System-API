@@ -5,6 +5,8 @@ import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/products/ProductsPage';
 import ProductDetailPage from './pages/products/ProductDetailPage';
 
+import ShelvesPage from './pages/shelves/ShelvesPage';
+import ShelfDetailPage from './pages/shelves/ShelfDetailPage';
 
 export default function App() {
   return (
@@ -23,6 +25,9 @@ export default function App() {
               <Link to="/products" className="text-gray-600 hover:text-indigo-600 transition-colors">
                 Products
               </Link>
+              <Link to="/shelves" className="text-gray-600 hover:text-indigo-600 transition-colors">
+                Shelves
+              </Link>
             </div>
           </div>
         </nav>
@@ -33,6 +38,8 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/:id" element={<ProductDetailPage />} />
+            <Route path="/shelves" element={<ShelvesPage />} />
+            <Route path="/shelves/:id" element={<ShelfDetailPage />} />
           </Routes>
         </main>
       </div>
