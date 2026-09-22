@@ -42,6 +42,21 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* Sales Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-lg transition-shadow">
+          <h2 className="text-lg font-semibold text-gray-900">Sales</h2>
+          <p className="mt-2 text-sm text-gray-600 mb-4">
+            Trigger transaction, tracks the timing, quantity sold, and revenue.
+          </p>
+          <Link 
+            to="/sales" 
+            className="inline-flex items-center font-semibold text-indigo-600 hover:text-indigo-800"
+          >
+            Go to Sales <span className="ml-1">➔</span>
+          </Link>
+        </div>
+
+
       </div>
     </div>
   );
