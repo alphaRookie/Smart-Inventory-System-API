@@ -313,8 +313,9 @@ class OrderPredictionService():
         # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
         sales_subquery = Sales.objects \
             .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .values('product') \
             .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
-            .values('total') # 'values' at the end is to hand back result and throw away other columns from Sales
+            .values('total') # 1st values (to group all sales for this product).. 2nd values(to hand back result and throw away other sales column)
 
         # Outer Query: For every product, run the inner sales_subquery. If it returns NULL, force it to 0, and attach that number to the product under name "base_demand"
         products = Product.objects \
@@ -357,7 +358,7 @@ class OrderPredictionService():
                 if new_records:
                     await sync_to_async(OrderPrediction.objects.bulk_create)(new_records)
 
-                return {"total_processed": len(new_records)}
+                return response.json() # returning the raw JSON list from FastAPI sitting in Python memory (React need to render it)
 
             return {"total_processed": 0, "error": f"FastAPI error: {response.status_code}"}
         
