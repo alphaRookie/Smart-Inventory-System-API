@@ -56,6 +56,33 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* Order Prediction Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Order Prediction</h2>
+            <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">ML Powered</span>
+          </div>
+          
+          <p className="mt-2 text-sm text-gray-600 mb-4">
+            Forecast stock demand using weather data, analyze sales lookback periods, and view prediction logs.
+          </p>
+          
+          <div className="flex items-center space-x-4 pt-2 border-t border-gray-100">
+            <Link 
+              to="/orderpred/forecast" 
+              className="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+            >
+              Run Forecast <span className="ml-1">➔</span>
+            </Link>
+            
+            <Link 
+              to="/orderpred/history" 
+              className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              View History
+            </Link>
+          </div>
+        </div>
 
       </div>
     </div>
