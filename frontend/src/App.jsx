@@ -11,6 +11,9 @@ import ShelfDetailPage from './pages/shelves/ShelfDetailPage';
 import SalesPage from './pages/sales/SalesPage';
 import SaleDetailPage from './pages/sales/SaleDetailPage';
 
+import OrderPredForecast from './pages/orderpred/OrderPredForecast';
+import OrderPredHistory from './pages/orderpred/OrderPredHistory';
+import OrderPredHistoryDetail from './pages/orderpred/OrderPredHistoryDetail';
 
 export default function App() {
   const [open, setOpen] = useState(false);
@@ -38,6 +41,40 @@ export default function App() {
                 Sales
               </Link>
 
+              {/* Dropdown Menu Container */}
+              <div className="relative">
+                <button 
+                  onClick={() => setOpen(!open)}
+                  className="text-gray-600 hover:text-indigo-600 flex items-center gap-1.5 py-1 font-medium transition-colors"
+                >
+                  Order Predictions 
+                  
+                  {/* Paste the JSX Icon and toggle rotation */}
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor" 
+                    className={`w-4 h-4 text-gray-400 translate-y-[2px] transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </button>
+
+                {open && (
+                  <div className="absolute top-full left-0 mt-2 w-44 bg-white/90 backdrop-blur-md border border-gray-100 rounded-lg shadow-xl py-1 flex flex-col z-20 transition-all">
+                    <Link 
+                      to="/orderpred/forecast" onClick={() => setOpen(false)}
+                      className="px-4 py-2 text-sm text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50 transition-colors"
+                    >
+                      Forecast
+                    </Link>
+                    <Link 
+                      to="/orderpred/history" onClick={() => setOpen(false)}
+                      className="px-4 py-2 text-sm text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50 transition-colors"
+                    >
+                      History
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </nav>
@@ -52,6 +89,9 @@ export default function App() {
             <Route path="/shelves/:id" element={<ShelfDetailPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/sales/:id" element={<SaleDetailPage />} />
+            <Route path="/orderpred/forecast" element={<OrderPredForecast />} />
+            <Route path="/orderpred/history" element={<OrderPredHistory />} />
+            <Route path="/orderpred/history/:id" element={<OrderPredHistoryDetail />} />
           </Routes>
         </main>
       </div>
