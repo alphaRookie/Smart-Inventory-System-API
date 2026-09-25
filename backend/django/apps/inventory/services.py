@@ -367,6 +367,59 @@ class OrderPredictionService():
             return {"total_processed": 0, "error": "Connection failed"} # skipped error part and goes to next
 
 
+    @staticmethod
+    async def get_raw_batch_predictions():
+        """ 
+        Fetches real-time predictions for all products. Does not save result in DB.
+        Returns a dictionary mapping: { product_id: predicted_demand }
+        """
+        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3))
+        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3))
+
+        fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")
+        url = f"{fastapi_host}/api/predict-batch"
+
+        # Build payload in memory
+        sales_subquery = Sales.objects \
+            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .values('product') \
+            .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
+            .values('total')
+
+        products = Product.objects \
+            .filter(is_deleted=False) \
+            .annotate(base_demand=Coalesce(Subquery(sales_subquery), 0))
+
+        payload = []
+        async for product in products:
+            payload.append({
+                "product_id": product.id,
+                "product_type": product.type,
+                "base_demand": int(product.base_demand / lookback_days_sales), # type: ignore
+                "current_stock": int(product.quantity),
+                "target_days_prediction": int(target_days_prediction)
+            })
+
+        custom_payload = {
+            "target_days_prediction": int(target_days_prediction),
+            "requests_list": payload,
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=custom_payload, timeout=5)
+
+            if response.status_code == 200:
+                # Build simple lookup table in memory: {101: 25, 102: 4, ...}
+                return {
+                    item["product_id"]: item["predicted_demand"] 
+                    for item in response.json()
+                }
+        except Exception as e:
+            print(f"Error fetching in-memory predictions: {str(e)}")
+
+        return {}
+
 
 class SpoilageNotificationService():
     @staticmethod
@@ -376,14 +429,10 @@ class SpoilageNotificationService():
         notif_list = []
         show_result = []
 
-        # 1st inner query
-        # fetch latest prediction for this prod (a product could have multiple prediction history bcoz it run every few days)
-        prediction_subquery = OrderPrediction.objects \
-            .filter(product=OuterRef('pk')) \
-            .order_by('-id') \
-            .values('demand_prediction')[:1] # refer to newest ID from that spesific product (in exchange to sort by created_at)
+        # Get real-time predictions in memory (no OrderPrediction DB rows created)
+        predictions = await OrderPredictionService.get_raw_batch_predictions()
 
-        # 2nd inner query: Check if an unread notification already exists for this product (no need to show same thing)
+        # inner query: Find existing unread notifications subquery
         notif_subquery = SpoilageNotification.objects.filter(
             product=OuterRef('pk'), # "Find any unread notification where the product matches the outer product's ID"
             is_read=False
@@ -393,29 +442,27 @@ class SpoilageNotificationService():
         days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
         almost_expired_prod = Product.objects \
             .filter(expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), is_deleted=False) \
-            .annotate(
-                demand_pred=Coalesce(Subquery(prediction_subquery), 0),
-                has_unread_notif=Exists(notif_subquery)
-            )
+            .annotate(has_unread_notif=Exists(notif_subquery))
 
         # loop through each expiring product
         async for prod in almost_expired_prod:
-            # each leftover stock of these expiring prod
-            stock_left = prod.quantity
+           
+            stock_left = prod.quantity # each leftover stock of these expiring prod
+            predicted_demand = predictions.get(prod.id, 0) # get from fast_api 
 
-            spoilage_risk = stock_left - prod.demand_pred #type:ignore
+            spoilage_risk = stock_left - predicted_demand
             
             if spoilage_risk <= 0:# Stock will be sold out before expired (No alert needed) 
                 continue 
+            
             else: # Spoilage risk detected!
-                # no need 
                 if not prod.has_unread_notif: #type:ignore
                     notif_list.append(
                         SpoilageNotification( # Stored in Model Instance, not dict
                             product = prod,
                             level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                             message = (
-                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {prod.demand_pred}. " #type:ignore
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}. "
                                 f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
                             )
                         )
