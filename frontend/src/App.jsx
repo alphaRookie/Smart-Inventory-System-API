@@ -15,6 +15,9 @@ import OrderPredForecast from './pages/orderpred/OrderPredForecast';
 import OrderPredHistory from './pages/orderpred/OrderPredHistory';
 import OrderPredHistoryDetail from './pages/orderpred/OrderPredHistoryDetail';
 
+import SpoilCheckPage from './pages/spoilcheck/SpoilCheckPages';
+import SpoilCheckDetailPage from './pages/spoilcheck/SpoilCheckDetailPage';
+
 export default function App() {
   const [open, setOpen] = useState(false);
 
@@ -59,7 +62,7 @@ export default function App() {
                 </button>
 
                 {open && (
-                  <div className="absolute top-full left-0 mt-2 w-44 bg-white/90 backdrop-blur-md border border-gray-100 rounded-lg shadow-xl py-1 flex flex-col z-20 transition-all">
+                  <div className="absolute top-full left-0 mt-2 w-36 bg-white/90 backdrop-blur-md border border-gray-100 rounded-lg shadow-xl py-1 flex flex-col z-20 transition-all">
                     <Link 
                       to="/orderpred/forecast" onClick={() => setOpen(false)}
                       className="px-4 py-2 text-sm text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50 transition-colors"
@@ -75,6 +78,11 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              <Link to="/spoilage" className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors py-1 !-ml-2">
+                Spoilage Check
+              </Link>
+
             </div>
           </div>
         </nav>
@@ -92,6 +100,8 @@ export default function App() {
             <Route path="/orderpred/forecast" element={<OrderPredForecast />} />
             <Route path="/orderpred/history" element={<OrderPredHistory />} />
             <Route path="/orderpred/history/:id" element={<OrderPredHistoryDetail />} />
+            <Route path="/spoilage" element={<SpoilCheckPage />} />
+            <Route path="/spoilage/:id" element={<SpoilCheckDetailPage />} />
           </Routes>
         </main>
       </div>
