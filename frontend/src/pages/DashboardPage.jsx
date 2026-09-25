@@ -84,6 +84,28 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Spoilage Check Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Spoilage Check</h2>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">ML Powered</span>
+              <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">Instant Telegram Alert</span>
+            </div>
+          </div>
+          
+          <p className="mt-2 text-sm text-gray-600 mb-4">
+            Run the Possibility of spoilage products that will be notified by Telegram and Tracks the history
+          </p>
+          
+          <Link 
+            to="/spoilage" 
+            className="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+          >
+            Run Check <span className="ml-1">➔</span>
+          </Link>
+        </div>
+
       </div>
     </div>
   );
