@@ -33,8 +33,8 @@ export default function ProductDetailPage() {
   };
 
   // Callback function passed to ProductForm (runs after successful PATCH submit)
-  const handleUpdateSuccess = (updatedProduct) => {
-    setProduct(updatedProduct); // updates local state with response from server
+  const handleUpdateSuccess = async () => {
+    await fetchData();
     setIsEditing(false);        // closes edit form and returns to read-only view
   };
 

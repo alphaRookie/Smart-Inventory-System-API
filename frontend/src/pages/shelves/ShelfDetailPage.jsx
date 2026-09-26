@@ -28,8 +28,8 @@ export default function ShelfDetailPage() {
   };
 
   // Callback function passed to ShelfForm (runs after successful PATCH submit)
-  const handleUpdateSuccess = (updatedShelf) => {
-    setShelf(updatedShelf); // updates local state with response from server
+  const handleUpdateSuccess = async (updatedShelf) => {
+    await fetchData();
     setIsEditing(false);     // closes edit form and returns to read-only view
   };
 
