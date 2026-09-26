@@ -28,7 +28,6 @@ export default function SalesPage() {
   // State handler auto-run after creating a sale record (no need to refresh page to see result)
   const handleFormSuccess = async () => {
     await fetchInitialData(); // Re-fetch from the API so backend calculated fields can automatically run 
-    setShowForm(false); // Close form after successful creation
   };
 
   // Triggered when deleting a sale record
@@ -64,7 +63,7 @@ export default function SalesPage() {
         <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md space-y-4">
           <SalesForm 
             initialData={null} // Always null since this page only creates new sale records
-            onSuccess={handleFormSuccess} 
+            onSuccess={handleFormSuccess} // waits success signal from child to trigger it
           />
           <button 
             onClick={() => setShowForm(false)} 
