@@ -19,7 +19,7 @@ export default function ProductsPage() {
     try {
       const [prodRes, shelfRes] = await Promise.all([ // Runs both GET API requests in parallel for speed
         API.get('/inventory/product'),
-        API.get('/inventory/shelf'),
+        API.get('/inventory/shelf'), //fetch shelf too so that shelves choice can be shown in dropdown
       ]);
       setProducts(prodRes.data); // saves backend results into local state
       setShelves(shelfRes.data);
@@ -41,9 +41,11 @@ export default function ProductsPage() {
     setShowForm(false); // Close form after successful creation
   };
 
-  // Triggered when deleting a product
+  // Triggered when deleting a product (without re-fecth from DB)
   const handleDelete = (deletedId) => {
-    setProducts(products.filter((p) => p.id !== deletedId));
+    setProducts(prevProducts =>
+      prevProducts.map(p => p.id === deletedId ? { ...p, is_deleted: true } : p)
+    );
   };
 
   // Toggle to hide/unhide deleted products
@@ -111,7 +113,7 @@ export default function ProductsPage() {
             <ProductCard 
               key={product.id} 
               product={product} 
-              onDelete={handleDelete}
+              onDelete={handleDelete} // waits until child sends back the target deleted product 
             />
           ))}
         </div>
