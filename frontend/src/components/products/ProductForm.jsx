@@ -7,15 +7,8 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
   const isEditing = Boolean(initialData?.id);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'WEATHER_NEUTRAL',
-    shelf_allocations: [],
-    expire_date: '',
-    quantity: 0,
-    unit_cost: 0,
-    selling_price: 0,
-  });
+  // EXACT name key expected by Django
+  const [formData, setFormData] = useState({name: '', type: '', shelf_allocations: [], expire_date: '', quantity: '', unit_cost: '', selling_price: ''});
 
   // Auto-fill the form when editing an existing product
   useEffect(() => {
@@ -23,12 +16,12 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
       setFormData({
         // fetch and show the value when PATCH and empty it when POST
         name: initialData.name || '',
-        type: initialData.type || 'WEATHER_NEUTRAL',
+        type: initialData.type || '',
         shelf_allocations: initialData.shelf_allocations || [],
         expire_date: initialData.expire_date || '',
-        quantity: initialData.quantity || 0,
-        unit_cost: initialData.unit_cost || 0,
-        selling_price: initialData.selling_price || 0,
+        quantity: initialData.quantity || '',
+        unit_cost: initialData.unit_cost || '',
+        selling_price: initialData.selling_price || '',
       });
     }
   }, [initialData]);
@@ -70,14 +63,8 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
         response = await API.post('/inventory/product', formData);
       }
 
-      // Sends the newly returned backend object back to ProductsPage.jsx
-      const savedProduct = response.data?.product || response.data;
-      onSuccess(savedProduct, isEditing);
+      onSuccess();  // trigger success signal to parent after form is sent
 
-      if (!isEditing) {
-        // Reset form fields after successful POST
-        setFormData({ name: '', type: 'WEATHER_NEUTRAL', shelf_allocations: [], expire_date: '', quantity: 0, unit_cost: 0, selling_price: 0, });
-      }
     } catch (err) {
       console.error("Form Submission Error:", err.response?.data);
       setErrorMessage(JSON.stringify(err.response?.data || "Operation failed"));
@@ -110,15 +97,15 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
       </div>
 
       <div>
-        <label className="block text-xs font-medium mb-1">Add Shelf</label>
+        <label className="block text-xs font-semibold text-gray-700 mb-1">Add Shelf</label>
         
         {/* Dropdown */}
         <select 
           value="" 
           onChange={(e) => handleShelfToggle(Number(e.target.value))}
-          className="w-full border p-2 rounded-lg bg-white text-sm"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <option value="">-- Select a shelf --</option>
+          <option disabled value="">-- Select a shelf --</option>
           {shelves
             .filter((s) => !selectedShelfIds.includes(s.id))
             .map((s) => <option key={s.id} value={s.id}>{s.category} (ID: {s.id})</option>)}
@@ -134,7 +121,7 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
                 min="1" 
                 value={alloc.quantity} 
                 onChange={(e) => handleShelfQtyChange(alloc.shelf, e.target.value)} 
-                className="w-16 border p-1 rounded-lg bg-white text-center"
+                className="w-16 border p-1 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button type="button" onClick={() => handleShelfToggle(alloc.shelf)} className="text-red-500 hover:text-red-700 font-bold">✕</button>
             </div>
@@ -143,12 +130,13 @@ export default function ProductForm({ shelves, initialData = null, onSuccess }) 
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1">Weather Responsiveness</label>
+        <label className="block text-xs font-semibold text-gray-700 mb-1">Weather Behavior</label>
         <select 
           value={formData.type} 
           onChange={(e) => setFormData({ ...formData, type: e.target.value })}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         >
+          <option value="" disabled>-- Select Weather Responsiveness --</option>
           <option value="WEATHER_NEUTRAL">All-Weather</option>
           <option value="HEAT_BOOST">Heat-Responsive</option>
           <option value="COLD_BOOST">Cold-Responsive</option>

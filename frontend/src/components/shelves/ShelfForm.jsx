@@ -3,21 +3,22 @@
 import { useState, useEffect } from 'react';
 import API from '../../api/axios';
 
-export default function ShelfForm({ initialData = null, onSuccess }) {
-  const isEditing = Boolean(initialData?.id);
+export default function ShelfForm({ initialData, onSuccess }) {
+  const isEditing = Boolean(initialData?.id); // waits for parent if intialData passed it become PATCH mode, otherwise POST
   const [errorMessage, setErrorMessage] = useState('');
 
+  // EXACT name key expected by Django
   const [formData, setFormData] = useState({
-    category: 'PERISHABLE',
-    max_shelf_capacity: 100,
+    category: '',
+    max_shelf_capacity: '',
   });
 
   // Auto-fill the form when editing an existing shelf
   useEffect(() => {
     if (initialData) {
       setFormData({
-        category: initialData.category || 'PERISHABLE',
-        max_shelf_capacity: initialData.max_shelf_capacity || 100,
+        category: initialData.category || '',
+        max_shelf_capacity: initialData.max_shelf_capacity || '',
       });
     }
   }, [initialData]);
@@ -34,18 +35,8 @@ export default function ShelfForm({ initialData = null, onSuccess }) {
       } else { // POST request when creating
         response = await API.post('/inventory/shelf', formData);
       }
+      onSuccess(); // trigger success signal to parent
 
-      // Sends the newly returned backend object back to parent page
-      const savedShelf = response.data?.shelf || response.data;
-      onSuccess(savedShelf, isEditing);
-
-      if (!isEditing) {
-        // Reset form fields after successful POST
-        setFormData({
-          category: 'PERISHABLE',
-          max_shelf_capacity: 100,
-        });
-      }
     } catch (err) {
       console.error("Form Submission Error:", err.response?.data);
       setErrorMessage(JSON.stringify(err.response?.data || "Operation failed"));
@@ -70,6 +61,7 @@ export default function ShelfForm({ initialData = null, onSuccess }) {
           onChange={(e) => setFormData({ ...formData, category: e.target.value })}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         >
+          <option value="" disabled>-- Select Category --</option>
           <option value="PERISHABLE">Perishable Goods</option>
           <option value="NON_PERISHABLE">Non-Perishable Goods</option>
           <option value="FROZEN">Frozen Food</option>
@@ -95,7 +87,7 @@ export default function ShelfForm({ initialData = null, onSuccess }) {
         type="submit"
         className="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition-colors shadow-sm"
       >
-        {isEditing ? 'Update Shelf' : 'Save Shelf'}
+        {isEditing ? 'Update Shelf' : 'Create Shelf'}
       </button>
     </form>
   );

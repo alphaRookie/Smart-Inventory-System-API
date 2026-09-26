@@ -3,11 +3,12 @@ import API from '../../api/axios';
 
 export default function SalesForm({ onSuccess }) {
   const [errorMessage, setErrorMessage] = useState('');
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([]); // Used to fetch and build the list of <option> in dropdown
 
+  // EXACT name key expected by Django
   const [formData, setFormData] = useState({
     product: '',
-    quantity_sold: 1,
+    quantity_sold: '',
   });
 
   // Fetch available products for the dropdown menu
@@ -29,24 +30,14 @@ export default function SalesForm({ onSuccess }) {
     e.preventDefault(); // Stops page reload
     setErrorMessage('');
 
-    // Format payload to ensure proper data types
-    const payload = {
-      product: Number(formData.product),
-      quantity_sold: Number(formData.quantity_sold),
-    };
-
     try {
-      const response = await API.post('/inventory/sales', payload);
-
-      // Sends newly returned backend object to parent component
-      const savedSale = response.data?.sale || response.data;
-      if (onSuccess) onSuccess(savedSale);
-
-      // Reset form fields after successful POST
-      setFormData({
-        product: products.length > 0 ? products[0].id : '',
-        quantity_sold: 1,
+      const response = await API.post('/inventory/sales', {
+        product: formData.product,
+        quantity_sold: Number(formData.quantity_sold),
       });
+      onSuccess();  // Send signal to parent after post successfully done 
+      setFormData({ product: formData.product, quantity_sold: '', }); // Reset form fields after successful POST
+
     } catch (err) {
       console.error("Form Submission Error:", err.response?.data);
       setErrorMessage(JSON.stringify(err.response?.data || "Operation failed"));
@@ -65,7 +56,7 @@ export default function SalesForm({ onSuccess }) {
 
       {/* Product Selection Dropdown */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1">Select Product</label>
+        <label className="block text-xs font-semibold text-gray-700 mb-1">Product</label>
         <select 
           value={formData.product} 
           onChange={(e) => setFormData({ ...formData, product: e.target.value })}
@@ -86,7 +77,7 @@ export default function SalesForm({ onSuccess }) {
         <label className="block text-xs font-semibold text-gray-700 mb-1">Quantity Sold</label>
         <input 
           type="number" 
-          placeholder="Quantity" 
+          placeholder="Quantity to be sold" 
           min="1"
           value={formData.quantity_sold} 
           onChange={(e) => setFormData({ ...formData, quantity_sold: Number(e.target.value) })} 
