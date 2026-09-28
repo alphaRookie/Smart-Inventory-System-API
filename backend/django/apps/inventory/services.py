@@ -368,20 +368,22 @@ class OrderPredictionService():
 
 
     @staticmethod
-    async def get_raw_batch_predictions():
+    async def get_raw_batch_predictions(lookback_days:None, target_days=None):
         """ 
         Fetches real-time predictions for all products. Does not save result in DB.
         Returns a dictionary mapping: { product_id: predicted_demand }
         """
-        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3))
-        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3))
+
+        # If client didn't send a parameter, use .env default
+        lookback = int(lookback_days or os.getenv("LOOKBACK_DAYS_SALES", 3))
+        target = int(target_days or os.getenv("TARGET_DAYS_PREDICTION", 3))
 
         fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")
         url = f"{fastapi_host}/api/predict-batch"
 
         # Build payload in memory
         sales_subquery = Sales.objects \
-            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback)) \
             .values('product') \
             .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
             .values('total')
@@ -395,13 +397,13 @@ class OrderPredictionService():
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type,
-                "base_demand": int(product.base_demand / lookback_days_sales), # type: ignore
+                "base_demand": int(product.base_demand / lookback), # type: ignore
                 "current_stock": int(product.quantity),
-                "target_days_prediction": int(target_days_prediction)
+                "target_days_prediction": int(target)
             })
 
         custom_payload = {
-            "target_days_prediction": int(target_days_prediction),
+            "target_days_prediction": int(target),
             "requests_list": payload,
         }
 
@@ -421,16 +423,23 @@ class OrderPredictionService():
         return {}
 
 
+
 class SpoilageNotificationService():
     @staticmethod
-    async def check_spoilage():
+    async def check_spoilage(lookback_days=None, target_days=None, days_to_expire=None):
 
         notifications_count = 0
         notif_list = []
         show_result = []
 
         # Get real-time predictions in memory (no OrderPrediction DB rows created)
-        predictions = await OrderPredictionService.get_raw_batch_predictions()
+        predictions = await OrderPredictionService.get_raw_batch_predictions(lookback_days, target_days)
+        if predictions is None:
+            return {"message": "Prediction service (FastAPI) is offline. Spoilage check aborted."}
+
+        # If client didn't send a parameter, use .env default
+        target_days = int(target_days or os.getenv("TARGET_DAYS_PREDICTION", 3))
+        days_to_expire = int(days_to_expire or os.getenv("DAYS_TO_EXPIRE", 14))
 
         # inner query: Find existing unread notifications subquery
         notif_subquery = SpoilageNotification.objects.filter(
@@ -439,19 +448,23 @@ class SpoilageNotificationService():
         )
 
         # Outer query
-        days_to_expire = int(os.getenv("DAYS_TO_EXPIRE", 14))
         almost_expired_prod = Product.objects \
             .filter(expire_date__lt = timezone.localdate() + timedelta(days=days_to_expire), is_deleted=False) \
             .annotate(has_unread_notif=Exists(notif_subquery))
 
         # loop through each expiring product
         async for prod in almost_expired_prod:
-           
-            stock_left = prod.quantity # each leftover stock of these expiring prod
-            predicted_demand = predictions.get(prod.id, 0) # get from fast_api 
-
-            spoilage_risk = stock_left - predicted_demand
             
+            stock_left = prod.quantity # each leftover stock of these expiring prod
+            raw_predicted_demand = predictions.get(prod.id) # get from fast_api (missing value handled above)
+
+            # "how much expected to be sold before the expiration date?"
+            # bcoz "target_days" max to 5 but "days_to_expire" can exceed, so we take daily demand rate and multiply by remaining expiration
+            daily_demand = raw_predicted_demand / target_days # type:ignore
+            remaining_days = max((prod.expire_date - timezone.localdate()).days, 0)
+            expected_sales = daily_demand * remaining_days
+
+            spoilage_risk = stock_left - expected_sales
             if spoilage_risk <= 0:# Stock will be sold out before expired (No alert needed) 
                 continue 
             
@@ -462,7 +475,7 @@ class SpoilageNotificationService():
                             product = prod,
                             level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                             message = (
-                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {predicted_demand}. "
+                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {raw_predicted_demand}. "
                                 f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
                             )
                         )
@@ -486,8 +499,8 @@ class SpoilageNotificationService():
                 f"Created <b>{len(notif_list)}</b> new warning alerts.\n\n"
             )
             
-            # Add up to 5 items so the lock screen stays clean
-            for item in show_result[:5]:
+            # Create notification message 
+            for item in show_result:
                 msg += f"• <b>{item['product_name']}</b>: Risk of {item['spoilage_risk']} units\n"
 
             # 3. Send straight to Telegram lock screen
