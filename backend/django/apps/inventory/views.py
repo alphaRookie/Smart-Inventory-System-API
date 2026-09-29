@@ -19,7 +19,7 @@ from .services import ProductService, ShelfService, SalesService, OrderPredictio
 class ProductAPIView(APIView):
 
     def get(self, request):
-        product = Product.objects.all() 
+        product = Product.objects.all().order_by('id')
         serializer = ProductSerializer(product, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -79,7 +79,7 @@ class ProductItemAPIView(APIView):
 class ShelfAPIView(APIView):
 
     def get(self, request):
-        shelf = Shelf.objects.all() 
+        shelf = Shelf.objects.all().order_by('id')
         serializer = ShelfSerializer(shelf, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -135,7 +135,7 @@ class ShelfItemAPIView(APIView):
 class SalesAPIView(APIView):
 
     def get(self, request):
-        sales = Sales.objects.all() 
+        sales = Sales.objects.all().order_by('-created_at')
         serializer = SalesSerializer(sales, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -176,7 +176,7 @@ class SalesItemAPIView(APIView):
 class OrderPredictionAPIView(APIView):
 
     def get(self, request):
-        order_prediction = OrderPrediction.objects.all() 
+        order_prediction = OrderPrediction.objects.all().order_by('-id')
         serializer = OrderPredictionSerializer(order_prediction, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -245,7 +245,7 @@ class BatchOrderPredictionView(APIView):
 class SpoilageNotificationAPIView(APIView):
 
     def get(self, request):
-        spoilage_notif = SpoilageNotification.objects.all() 
+        spoilage_notif = SpoilageNotification.objects.all().order_by('-created_at')
         serializer = SpoilageNotificationSerializer(spoilage_notif, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -273,12 +273,15 @@ class SpoilageCheckView(APIView):
     """ Optional action to manually triggers spoilage check (by default this automatically run by celery) """
 
     async def post(self, request):
-        ai_data = await SpoilageNotificationService.check_spoilage()
+
+        # Extract user inputs from request payload 
+        lookback_days_input = request.data.get("lookback_days_sales") 
+        target_days_input = request.data.get("target_days_prediction")
+        days_to_expire = request.data.get("days_to_expire")
+
+        ai_data = await SpoilageNotificationService.check_spoilage(lookback_days=lookback_days_input, target_days=target_days_input, days_to_expire=days_to_expire)
 
         if not ai_data:
             return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
-        return Response({
-            "message": ai_data.get("notif_count"), 
-            "predictions": ai_data.get("result")  # List prediction results if found the new, otherwise show text (service)
-        }, status=status.HTTP_200_OK) 
+        return Response(ai_data, status=status.HTTP_200_OK) 
