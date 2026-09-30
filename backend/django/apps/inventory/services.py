@@ -295,18 +295,19 @@ class OrderPredictionService():
 
 
     @staticmethod 
-    async def fetch_batch_prediction():
+    async def fetch_batch_prediction(lookback_days:None, target_days=None):
         """ Sends all products data to FastAPI and returns the prediction numbers. """
 
-        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
-        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+        # If client didn't send a parameter, use .env default
+        lookback = int(lookback_days or os.getenv("LOOKBACK_DAYS_SALES", 3))
+        target = int(target_days or os.getenv("TARGET_DAYS_PREDICTION", 3))
 
-        if lookback_days_sales < 1:
+        if lookback < 1:
             raise ValidationError("Cannot lookback the sales data happened less than 1 day")
-        if target_days_prediction < 1:
+        if target < 1:
             raise ValidationError("Target days prediction must be at least 1 day.")
-        if target_days_prediction > 5:
-            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
+        if target > 5:
+            raise ValidationError(f"Cannot predict for {target} days as OpenWeatherMap free tier forecast limit to 5 days.")
 
         # FastAPI URL endpoint
         fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")  # will automatically switch to docker DNS if run by docker
@@ -317,7 +318,7 @@ class OrderPredictionService():
         # Inner Query: find out how much this product is sold in the last ... days (iterate each diff pk)
         # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
         sales_subquery = Sales.objects \
-            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback_days_sales)) \
+            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback)) \
             .values('product') \
             .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
             .values('total') # 1st values (to group all sales for this product).. 2nd values(to hand back result and throw away other sales column)
@@ -332,14 +333,14 @@ class OrderPredictionService():
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type, 
-                "base_demand": int(product.base_demand / lookback_days_sales), # divide by ... to get daily baseline  #type:ignore
+                "base_demand": int(product.base_demand / lookback), # divide by ... to get daily baseline  #type:ignore
                 "current_stock": int(product.quantity), 
-                "target_days_prediction": int(target_days_prediction)
+                "target_days_prediction": int(target)
             })
 
         # WRAP IT in a Dict to macth BatchPredictionRequest in main.py
         custom_payload = {
-            "target_days_prediction": int(target_days_prediction),
+            "target_days_prediction": int(target),
             "requests_list": payload,
         }
             
@@ -353,7 +354,7 @@ class OrderPredictionService():
                         product_id = item["product_id"],  # access its ID by '_' (while '__' only for DB query)
                         demand_prediction = item["predicted_demand"], 
                         order_suggestion = item["suggested_order"],
-                        target_timing = timezone.localdate() + timedelta(days=target_days_prediction)
+                        target_timing = timezone.localdate() + timedelta(days=target)
                     )
                     # LOOP COMPREHENSIVE. It loops through all prediction dict returned by FastAPI
                     for item in response.json() 
@@ -365,11 +366,11 @@ class OrderPredictionService():
 
                 return response.json() # returning the raw JSON list from FastAPI sitting in Python memory (React need to render it)
 
-            return {"total_processed": 0, "error": f"FastAPI error: {response.status_code}"}
+            return None
         
         except Exception as e:
             print(f"Error in batch prediction: {str(e)}")
-            return {"total_processed": 0, "error": "Connection failed"} # skipped error part and goes to next
+            return None # If connection failed or timed out
 
 
     @staticmethod
@@ -422,10 +423,10 @@ class OrderPredictionService():
                     item["product_id"]: item["predicted_demand"] 
                     for item in response.json()
                 }
+            return None
         except Exception as e:
             print(f"Error fetching in-memory predictions: {str(e)}")
-
-        return {}
+            return None # so when failed connect to Fastapi, it raise validation by check_spoilage
 
 
 

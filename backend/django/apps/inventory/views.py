@@ -231,15 +231,16 @@ class BatchOrderPredictionView(APIView):
     """ Optional action to manually triggers the AI prediction for all products (by default this automatically run by celery) """
 
     async def post(self, request):
-        ai_data = await OrderPredictionService.fetch_batch_prediction()
+        # Extract user inputs from request payload
+        lookback_days_input = request.data.get("lookback_days_sales")
+        target_days_input = request.data.get("target_days_prediction") 
 
-        if not ai_data:
-            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        ai_data = await OrderPredictionService.fetch_batch_prediction(lookback_days=lookback_days_input , target_days=target_days_input)
+
+        if ai_data is None:
+            return Response({"error_msg": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
-        return Response({
-            "message": "Batch predictions successfully done",
-            "total_processed": ai_data.get("total_processed"), 
-        }, status=status.HTTP_200_OK)
+        return Response(ai_data, status=status.HTTP_200_OK)
 
 
 
