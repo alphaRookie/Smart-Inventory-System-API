@@ -205,11 +205,15 @@ class SingleOrderPredictionView(APIView):
 
     async def post(self, request, product_id):
         product = await aget_object_or_404(Product, id=product_id) 
+
+        # Extract user inputs from request payload 
+        lookback_days_input = request.data.get("lookback_days_sales") 
+        target_days_input = request.data.get("target_days_prediction") 
         
-        ai_data = await OrderPredictionService.fetch_single_prediction(product=product)
+        ai_data = await OrderPredictionService.fetch_single_prediction(product=product, lookback_days=lookback_days_input , target_days=target_days_input)
         
-        if not ai_data:
-            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if ai_data is None:
+            return Response({"error_msg": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response({ # Return JSON result to the dashboard
             "product_id": product.id,
@@ -281,7 +285,7 @@ class SpoilageCheckView(APIView):
 
         ai_data = await SpoilageNotificationService.check_spoilage(lookback_days=lookback_days_input, target_days=target_days_input, days_to_expire=days_to_expire)
 
-        if not ai_data:
-            return Response({"error": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if ai_data is None:
+            return Response({"error_msg": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
         return Response(ai_data, status=status.HTTP_200_OK) 

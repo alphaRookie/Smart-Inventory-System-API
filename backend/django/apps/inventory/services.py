@@ -2,7 +2,7 @@ from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification
 from datetime import timedelta, date, datetime
 from decimal import Decimal
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, APIException
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Q, F, Sum
 from asgiref.sync import sync_to_async
@@ -232,18 +232,23 @@ class SalesService():
 class OrderPredictionService():
 
     @staticmethod
-    async def fetch_single_prediction(product:Product):
+    async def fetch_single_prediction(product:Product, lookback_days:None, target_days:None):
         """ Sends a single product data to FastAPI and returns the prediction numbers. """
 
-        lookback_days_sales = int(os.getenv("LOOKBACK_DAYS_SALES", 3)) # decide: user wants to find sales data in the last how many days? 
-        target_days_prediction = int(os.getenv("TARGET_DAYS_PREDICTION", 3)) # decide: user wants to prepare stock for how many upcoming days?
+        # If client didn't send a parameter, use .env default
+        lookback = int(lookback_days or os.getenv("LOOKBACK_DAYS_SALES", 3))
+        target = int(target_days or os.getenv("TARGET_DAYS_PREDICTION", 3))
 
-        if lookback_days_sales < 1:
+        if lookback < 1:
             raise ValidationError("Cannot lookback the sales data happened less than 1 day")
-        if target_days_prediction < 1:
+        if target < 1:
             raise ValidationError("Target days prediction must be at least 1 day.")
-        if target_days_prediction > 5:
-            raise ValidationError(f"Cannot predict for {target_days_prediction} days as OpenWeatherMap free tier forecast limit to 5 days.")
+        if target > 5:
+            raise ValidationError(f"Cannot predict for {target} days as OpenWeatherMap free tier forecast limit to 5 days.")
+        if product.is_deleted == True:
+            raise ValidationError("Cannot predict deleted product")
+        if product.is_expired == True:
+            raise ValidationError("Cannot predict expired product")
 
         # FastAPI URL endpoint
         # will automatically switch to docker DNS if run by docker
@@ -252,16 +257,16 @@ class OrderPredictionService():
 
         # find out how many product is sold based on each different types in the last ... days
         demand = await Sales.objects \
-            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback_days_sales)) \
+            .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback)) \
             .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
         # Request data to be sent to Fast api
         payload = {
             "product_id": product.id,
             "product_type": product.type,
-            "base_demand": int(demand["base_demand"] / lookback_days_sales), # divide by ... to get daily baseline
+            "base_demand": int(demand["base_demand"] / lookback), # divide by ... to get daily baseline
             "current_stock": int(product.quantity) if product else 0, # explicitly, bcoz from a web form, they usually come in as strings
-            "target_days_prediction": int(target_days_prediction)
+            "target_days_prediction": int(target)
         }
 
         try:
@@ -274,7 +279,7 @@ class OrderPredictionService():
                     product=product,
                     demand_prediction=response.json()["predicted_demand"],
                     order_suggestion=response.json()["suggested_order"],
-                    target_timing=timezone.localdate() + timedelta(days=target_days_prediction)
+                    target_timing=timezone.localdate() + timedelta(days=target)
                 )
 
                 # 2.Return a dictionary so ai_data.get() can works in views
@@ -435,7 +440,7 @@ class SpoilageNotificationService():
         # Get real-time predictions in memory (no OrderPrediction DB rows created)
         predictions = await OrderPredictionService.get_raw_batch_predictions(lookback_days, target_days)
         if predictions is None:
-            return {"message": "Prediction service (FastAPI) is offline. Spoilage check aborted."}
+            raise APIException({"service_err": "Prediction service (FastAPI) is offline. Spoilage check aborted"})
 
         # If client didn't send a parameter, use .env default
         target_days = int(target_days or os.getenv("TARGET_DAYS_PREDICTION", 3))
