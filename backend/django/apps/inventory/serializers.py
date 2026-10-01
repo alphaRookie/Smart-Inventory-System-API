@@ -36,19 +36,23 @@ class ShelfSerializer(serializers.ModelSerializer):
 
 
 class SalesSerializer(serializers.ModelSerializer): 
+    # Asks Django to send the full product object, not just the ID 
+    product_obj = ProductSerializer(source='product', read_only=True)
     class Meta: 
         model = Sales
-        fields = ["id", "created_at", "product", "quantity_sold", "total_revenue"]
+        fields = ["id", "created_at", "product", "quantity_sold", "total_revenue", "product_obj"]
         read_only_fields = ["id", "total_revenue"]
 
 class OrderPredictionSerializer(serializers.ModelSerializer): 
+    product_obj = ProductSerializer(source='product', read_only=True)
     class Meta: 
         model = OrderPrediction
-        fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing"]
+        fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing", "product_obj"]
         read_only_fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing"] # put all bcoz AI who inputs it, not user
 
 class SpoilageNotificationSerializer(serializers.ModelSerializer):
+    product_obj = ProductSerializer(source='product', read_only=True)
     class Meta:
         model = SpoilageNotification
-        fields = ["id", "product", "message", "level", "is_read", "created_at"]
+        fields = ["id", "product", "message", "level", "is_read", "created_at", "product_obj"]
         read_only_fields = ["id", "created_at"]
