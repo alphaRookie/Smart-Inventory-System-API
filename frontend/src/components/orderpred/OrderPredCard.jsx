@@ -34,7 +34,7 @@ export default function OrderPredCard({ orderpred, onDelete }) { // these 2 are 
 
   return (
     <div 
-      className = "p-4 rounded-lg border shadow-sm transition-all bg-white border-gray-200 text-gray-800"
+      className = "p-4 rounded-lg border shadow-sm hover:shadow-lg transition-all bg-white border-gray-200 text-gray-800"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
