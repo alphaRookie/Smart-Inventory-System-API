@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import API from '../../api/axios';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 export default function SalesCard({ sale, onDelete }) { // receive sale object and onDelete handler
   const [isDeleting, setIsDeleting] = useState(false);
@@ -10,10 +11,11 @@ export default function SalesCard({ sale, onDelete }) { // receive sale object a
   const handleDelete = async () => {
     try {
       setIsDeleting(true); // 1. Lock button state
-      setErrorMsg(''); // Reset prior errors
-      await API.delete(`/inventory/sales/${sale.id}`); // 2. Send DELETE request
-      onDelete(sale.id); // 3. Remove item from parent state
-      setShowModal(false); // 4. Close modal on success
+      setErrorMsg(''); 
+      await API.delete(`/inventory/sales/${sale.id}`); 
+      toast.success(`Sales record #${sale.id} successfully deleted!`); 
+      onDelete(sale.id); 
+      setShowModal(false); 
     } catch (error) {
       console.error("Error deleting sale record:", error);
       setErrorMsg('Failed to delete item. Please try again.');
@@ -40,7 +42,7 @@ export default function SalesCard({ sale, onDelete }) { // receive sale object a
     : 'N/A';
 
   return (
-    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm transition-all">
+    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:shadow-lg transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <strong className="text-base font-semibold text-gray-900">

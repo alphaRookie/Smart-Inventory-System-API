@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import API from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function SalesForm({ onSuccess }) {
   const [errorMessage, setErrorMessage] = useState('');
@@ -31,16 +32,16 @@ export default function SalesForm({ onSuccess }) {
     setErrorMessage('');
 
     try {
-      const response = await API.post('/inventory/sales', {
-        product: formData.product,
-        quantity_sold: Number(formData.quantity_sold),
-      });
-      onSuccess();  // Send signal to parent after post successfully done 
+      const response = await API.post('/inventory/sales', formData);
       setFormData({ product: formData.product, quantity_sold: '', }); // Reset form fields after successful POST
+      toast.success("Sale successfully recorded!");
+      onSuccess();  // Send signal to parent after post successfully done 
 
     } catch (err) {
-      console.error("Form Submission Error:", err.response?.data);
-      setErrorMessage(JSON.stringify(err.response?.data || "Operation failed"));
+      // Inline msg for validation error and Toast msg for server error
+      if (err.response?.status === 400){setErrorMessage(err.response?.data);} 
+      else {toast.error("Could not contact Django backend engine");}  
+      console.error("Form Submission Error by Sale:", err);
     }
   };
 
