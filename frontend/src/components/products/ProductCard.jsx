@@ -3,6 +3,7 @@
 import { Link } from 'react-router-dom';
 import API from '../../api/axios';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 export default function ProductCard({ product, onDelete }) { // these 2 are props received
   const [isDeleting, setIsDeleting] = useState(false);
@@ -13,11 +14,12 @@ export default function ProductCard({ product, onDelete }) { // these 2 are prop
 
   const handleDelete = async () => { // This fills the 'deletedId' parameter in ProductsPage
     try { 
-      setIsDeleting(true); // 1. set to true to lock the button
+      setIsDeleting(true); // set to true to lock the button
       setErrorMsg(''); // Reset old errors before trying again
-      await API.delete(`/inventory/product/${product.id}`); // 2. Send DELETE request to specific ID
-      onDelete(product.id); // 3. After API call succeed, Tell the Page to remove this item from the screen
-      setShowModal(false); // 4. finally close the modal (this runs only when succeed)
+      await API.delete(`/inventory/product/${product.id}`); // delete returns nothing, no need create variable
+      toast.success(`Product #${product.id} successfully deleted!`); 
+      onDelete(product.id); 
+      setShowModal(false); // close the modal (this runs only when succeed)
     } catch (error) {
       console.error("Error deleting product:", error);
       setErrorMsg('Failed to delete item. Please try again.');
@@ -33,7 +35,7 @@ export default function ProductCard({ product, onDelete }) { // these 2 are prop
 
   return (
     <div 
-      className={`p-4 rounded-lg border shadow-sm transition-all ${
+      className={`p-4 rounded-lg border shadow-sm hover:shadow-lg transition-all ${
         isDeleted 
           ? 'bg-gray-800 border-gray-700 text-gray-400 opacity-60' 
           : 'bg-white border-gray-200 text-gray-800'
