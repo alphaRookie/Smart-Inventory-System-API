@@ -4,32 +4,29 @@ import toast from 'react-hot-toast';
 
 export default function SpoilCheckForm({ onSuccess }) {
   const [isChecking, setIsChecking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const [formData, setFormData] = useState({
-    daysToExpire: '',
-    lookbackDays: '',
-    targetDays: '',
+    days_to_expire: '',
+    lookback_days_sales: '',
+    target_days_prediction: '',
   });
 
   const handleRunSpoilCheck = async (e) => {
     e.preventDefault(); 
     setIsChecking(true);
+    setErrorMessage('');
 
     try {
-      const response = await API.post('/inventory/spoilage-check', {
-        days_to_expire: Number(formData.daysToExpire),
-        lookback_days_sales: Number(formData.lookbackDays),
-        target_days_prediction: Number(formData.targetDays),
-      });
-
-      const backendMsg = response.data.notif_count; // Extract message from "notif_count" string returned from service.py
-      toast.success(backendMsg); 
-
+      const response = await API.post('/inventory/spoilage-check', formData);
+      toast.success(response.data.notif_count);  // Extract message from "notif_count" string returned from service.py
       onSuccess();
 
     } catch (err) {
-      console.error('Failed to run Spoilage check:', err);
-      toast.error('Failed to run Spoilage check. Please try again.');
+      // Inline msg for validation error and Toast msg for server error(no resp)
+      if (err.response?.status === 400){setErrorMessage(err.response?.data);} 
+      else {toast.error(err.response?.data?.service_err || "Could not contact Django backend engine");} // dynamically handle if 1 of them or both engine are off
+      console.error("Error to run Spoilage check:", err);
     } finally {
       setIsChecking(false);
     }
@@ -39,6 +36,12 @@ export default function SpoilCheckForm({ onSuccess }) {
     <form onSubmit={handleRunSpoilCheck} className="flex flex-col gap-4 max-w-md">
       <h3 className="text-lg font-bold text-gray-900">Execute Spoilage Check</h3>
 
+      {errorMessage && (
+        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-lg">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Days Input */}
       <div>
         <label className="block text-xs font-semibold text-gray-700 mb-1">Expiration Window (Days)</label>
@@ -46,13 +49,13 @@ export default function SpoilCheckForm({ onSuccess }) {
           type="number"
           placeholder="Days to be Expired"
           min="1"
-          value={formData.daysToExpire}
-          onChange={(e) => setFormData({ ...formData, daysToExpire: e.target.value })}
+          value={formData.days_to_expire}
+          onChange={(e) => setFormData({ ...formData, days_to_expire: e.target.value })}
           required
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <p className="bg-slate-50 border border-slate-200 rounded-md p-2.5 text-xs text-gray-600 leading-relaxed">
-          <strong>How it works?</strong> For Example, if you type <strong>7</strong>, it lists products expiring in the next 7 days and evaluates leftover stock to determine risk level (Warning or Danger).
+          <strong>How it works?</strong> For Example, if you type <strong>7</strong>, it lists products expiring within the next 7 days and evaluates leftover stock to determine risk level (Warning or Danger).
         </p>
       </div>
 
@@ -64,8 +67,8 @@ export default function SpoilCheckForm({ onSuccess }) {
           name="lookback_days"
           placeholder="Days of past sales data to analyze (e.g. 3)"
           min="1"
-          value={formData.lookbackDays}
-          onChange={(e) => setFormData({ ...formData, lookbackDays: e.target.value })}
+          value={formData.lookback_days_sales}
+          onChange={(e) => setFormData({ ...formData, lookback_days_sales: e.target.value })}
           required
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
@@ -80,8 +83,8 @@ export default function SpoilCheckForm({ onSuccess }) {
           placeholder="Number of upcoming days to prepare stock for (e.g. 1-5)"
           min="1"
           max="5"
-          value={formData.targetDays}
-          onChange={(e) => setFormData({ ...formData, targetDays: e.target.value })}
+          value={formData.target_days_prediction}
+          onChange={(e) => setFormData({ ...formData, target_days_prediction: e.target.value })}
           required
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />

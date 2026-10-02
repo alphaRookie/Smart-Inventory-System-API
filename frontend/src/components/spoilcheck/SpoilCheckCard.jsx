@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import API from '../../api/axios';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 export default function SpoilNotifCard({ spoilnotif, onDelete }) { // receive spoilnotif object and onDelete handler
   const [isDeleting, setIsDeleting] = useState(false);
@@ -13,6 +14,7 @@ export default function SpoilNotifCard({ spoilnotif, onDelete }) { // receive sp
       setErrorMsg(''); // Reset prior errors
       await API.delete(`/inventory/spoilage-notif/${spoilnotif.id}`); // 2. Send DELETE request
       onDelete(spoilnotif.id); // 3. Remove item from parent state
+      toast.success(`Spoilage check record #${spoilnotif.id} successfully deleted!`); 
       setShowModal(false); // 4. Close modal on success
     } catch (error) {
       console.error("Error deleting a spoilage notif record:", error);
@@ -29,7 +31,7 @@ export default function SpoilNotifCard({ spoilnotif, onDelete }) { // receive sp
 
 
   return (
-    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm transition-all">
+    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:shadow-lg transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <strong className="text-base font-semibold text-gray-900">
