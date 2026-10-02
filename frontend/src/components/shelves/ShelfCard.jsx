@@ -3,6 +3,7 @@
 import { Link } from 'react-router-dom';
 import API from '../../api/axios';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 export default function ShelfCard({ shelf, onDelete }) { // these 2 are props received
   const [isDeleting, setIsDeleting] = useState(false);
@@ -13,9 +14,10 @@ export default function ShelfCard({ shelf, onDelete }) { // these 2 are props re
     try { 
       setIsDeleting(true); // 1. set to true to lock the button
       setErrorMsg(''); // Reset old errors before trying again
-      await API.delete(`/inventory/shelf/${shelf.id}`); // 2. Send DELETE request to specific ID
-      onDelete(shelf.id); // 3. After API call succeed, Tell the Page to remove this item from the screen
-      setShowModal(false); // 4. finally close the modal (this runs only when succeed)
+      await API.delete(`/inventory/shelf/${shelf.id}`); 
+      toast.success(`Shelf #${shelf.id} successfully deleted!`); 
+      onDelete(shelf.id); 
+      setShowModal(false); 
     } catch (error) {
       console.error("Error deleting shelf:", error);
       setErrorMsg('Failed to delete item. Please try again.');
@@ -30,7 +32,7 @@ export default function ShelfCard({ shelf, onDelete }) { // these 2 are props re
   };
 
   return (
-    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm transition-all">
+    <div className="p-4 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:shadow-lg transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <strong className="text-base font-semibold text-gray-900">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import API from '../../api/axios';
+import toast from 'react-hot-toast';
 
 export default function ShelfForm({ initialData, onSuccess }) {
   const isEditing = Boolean(initialData?.id); // waits for parent if intialData passed it become PATCH mode, otherwise POST
@@ -35,11 +36,13 @@ export default function ShelfForm({ initialData, onSuccess }) {
       } else { // POST request when creating
         response = await API.post('/inventory/shelf', formData);
       }
+      toast.success(isEditing ? "Shelf updated!" : "New Shelf successfully created!"); 
       onSuccess(); // trigger success signal to parent
 
     } catch (err) {
-      console.error("Form Submission Error:", err.response?.data);
-      setErrorMessage(JSON.stringify(err.response?.data || "Operation failed"));
+      if (err.response?.status === 400){setErrorMessage(err.response?.data);} 
+      else {toast.error("Could not contact Django backend engine");}  
+      console.error("Form Submission Error by Shelf:", err);
     }
   };
 
@@ -57,6 +60,7 @@ export default function ShelfForm({ initialData, onSuccess }) {
       <div>
         <label className="block text-xs font-semibold text-gray-700 mb-1">Shelf Category</label>
         <select 
+          required
           value={formData.category} 
           onChange={(e) => setFormData({ ...formData, category: e.target.value })}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
