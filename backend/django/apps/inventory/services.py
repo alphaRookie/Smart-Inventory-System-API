@@ -1,17 +1,17 @@
 from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
 from datetime import timedelta, date, datetime
-from decimal import Decimal
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, APIException
 from django.db.models.functions import Coalesce
-from django.db.models import Count, Q, F, Sum
+from django.db.models import Count, Q, F, Sum, Subquery, OuterRef, Exists
+from django.db import transaction
 from asgiref.sync import sync_to_async
-from django.db.models import Subquery, OuterRef
-from django.db.models import Exists
+from django_celery_beat.models import PeriodicTask, CrontabSchedule
 
 import httpx
 import os
 import logging
+import json
 
 
 class ProductService(): 
@@ -219,8 +219,6 @@ class SalesService():
         # logic to auto-create 'total_revenue' field
         if sales:
             sales.total_revenue = quantity_sold * sales.product.selling_price
-        else:
-            sales.total_revenue = Decimal("0")
 
         sales.save() # save first before decrease it
 
@@ -547,3 +545,81 @@ class TelegramBot():
         except Exception as e:
             logger.error(f"Failed to send Telegram alert: {e}")
             return False
+
+
+class TaskScheduler():
+
+    @staticmethod
+    def seed_default_tasks():
+        """ Creates default PeriodicTask rows if they don't exist yet. """
+        
+        DEFAULT_TASKS = [
+            {
+                'name': 'run-spoilage-check',
+                'path': 'inventory.tasks.run_spoilage_check',
+                'hour': 0,
+                'minute': 0,
+                'every_n_days': 0,
+            },
+            {
+                'name': 'run-order-predictions',
+                'path': 'inventory.tasks.run_inventory_check',
+                'hour': 0,
+                'minute': 0,
+                'every_n_days': 0,
+            },
+        ]
+        
+        for item in DEFAULT_TASKS:
+            # Both are built-in model from django-celery-beat(must follow exact naming)
+            # 1. Ensure the default crontab exists
+            crontab, _ = CrontabSchedule.objects.get_or_create(
+                minute=str(item['minute']),
+                hour=str(item['hour']),
+                day_of_month=f"{item['every_n_days']}", # Celery Beat requires cron syntax ("*/N") to handle interval-based calendar days
+                month_of_year='*',
+                day_of_week='*',
+            )
+
+            # 2. Create the task only if missing
+            PeriodicTask.objects.get_or_create(
+                name=item['name'],
+                defaults={
+                    'task': item['path'],
+                    'crontab': crontab,
+                    'enabled': False,
+                    'args': json.dumps([]),
+                }
+            )
+
+    @staticmethod
+    def update_task_schedule(
+        task_name: str, 
+        task_path: str, 
+        hour: int | None = None, 
+        minute: int | None = None, 
+        every_n_days: int | None = None, 
+        enabled: bool | None = None
+    ):
+        """ Updates timing or enabled status for an existing task. """
+        try:
+            periodic_task = PeriodicTask.objects.get(name=task_name)
+        except PeriodicTask.DoesNotExist:
+            return None
+
+        if enabled is not None:
+            periodic_task.enabled = enabled
+
+        if all(v is not None for v in [hour, minute, every_n_days]):
+            crontab_schedule, _ = CrontabSchedule.objects.get_or_create(
+                minute=str(minute),
+                hour=str(hour),
+                day_of_month=f"*/{every_n_days}",
+                month_of_year='*',
+                day_of_week='*',
+            )
+            periodic_task.crontab = crontab_schedule
+            periodic_task.task = task_path
+
+        periodic_task.save()
+        return periodic_task
