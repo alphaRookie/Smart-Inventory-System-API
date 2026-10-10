@@ -8,8 +8,9 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from adrf.views import APIView # auto-recognize when async def mentioned
 
 from .models import Product, Shelf, Sales, OrderPrediction, SpoilageNotification
-from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageNotificationSerializer
-from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageNotificationService
+from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageNotificationSerializer, TaskUpdateSerializer, TaskListSerializer
+from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageNotificationService, TaskScheduler
+from django_celery_beat.models import PeriodicTask
 
 
 @extend_schema_view(
@@ -290,3 +291,43 @@ class SpoilageCheckView(APIView):
             return Response({"error_msg": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
        
         return Response(ai_data, status=status.HTTP_200_OK) 
+
+
+
+class TaskSchedulerView(APIView):
+    def get(self, request):
+        # 1. Lazy seeding: Ensure default tasks exist in DB
+        TaskScheduler.seed_default_tasks()
+
+        # 2. Fetch the tasks
+        schedules = PeriodicTask.objects.filter(
+            name__in=['run-spoilage-check', 'run-order-predictions']
+        )
+        serializer = TaskListSerializer(schedules, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk=None):
+        serializer = TaskUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data)
+
+        try:
+            task = PeriodicTask.objects.get(pk=pk)
+        except PeriodicTask.DoesNotExist:
+            return Response({"service_err": "Task schedule not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        task_obj = TaskScheduler.update_task_schedule(
+            task_name=task.name,
+            task_path=task.task,
+            hour=validated_data.get('hour'),
+            minute=validated_data.get('minute'),
+            every_n_days=validated_data.get('every_n_days'),
+            enabled=validated_data.get('enabled')
+        )
+        if task_obj is None:
+            return Response({"service_err": "Failed to update schedule"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "status": "success",
+            "message": "Schedule updated successfully."
+        }, status=status.HTTP_200_OK)
