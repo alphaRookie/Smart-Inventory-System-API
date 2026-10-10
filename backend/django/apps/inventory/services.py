@@ -43,13 +43,20 @@ class ProductService():
                 
 
     @staticmethod
-    def save_product(product: Product | None=None, **kwargs):
+    @transaction.atomic # if fails midways, must start over, dont let db to be inconsistent
+    def save_product(*, product: Product | None=None, **kwargs):
 
-        # receive the raw kwargs package and filter out None value
-        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        # remove non-model fields before instantiate model (gets extracted into the variable 'shelf_alloc')
+        shelf_alloc = kwargs.pop("shelf_allocations", None)
+        
+        if product:
+            for key, value in kwargs.items():   # Step 1: Loop through all valued fields from kwargs
+                setattr(product, key, value)    # Step 2: Assign the valued field directly to the object (product.field = value)
+        else:
+            product = Product(**kwargs)
 
-        shelf_alloc = clean_kwargs.get("shelf_allocations")
-        if shelf_alloc is None and product: # fallback if shelf_allocation field empty in patch
+        # fallback if shelf_allocation field is empty during patch
+        if shelf_alloc is None and product: 
             shelf_alloc = [
                 {"shelf": ps.shelf, "quantity": ps.quantity}
                 for ps in product.shelf_allocations.all()
@@ -62,7 +69,10 @@ class ProductService():
                 qty = item["quantity"]
 
                 # 2 lines below is to handle when patching (when PATCH we need true available space, not user input quantity like when POST)
-                existing_link = ProductShelf.objects.filter(product=product, shelf=shelf).first() if product else None
+                existing_link = (
+                    ProductShelf.objects.filter(product=product, shelf=shelf).first() 
+                    if product.pk else None
+                )
                 old_qty = existing_link.quantity if existing_link else 0
 
                 available_space = (shelf.max_shelf_capacity - shelf.current_stock) + old_qty
@@ -70,32 +80,26 @@ class ProductService():
                     raise ValidationError(f"Can't fit {qty} units on shelf id '{shelf.id}', space remaining: {available_space} ")
 
         # Validation 2
-        selling_price = clean_kwargs.get("selling_price") or (product.selling_price if product else 0)
-        unit_cost = clean_kwargs.get("unit_cost") or (product.unit_cost if product else 0)
-        if selling_price and unit_cost:
-            if selling_price < unit_cost:
+        if product.selling_price and product.unit_cost:
+            if product.selling_price < product.unit_cost:
                 raise ValidationError("Selling price cannot be lower than unit cost (negative profit margin)")
             
         # Validation 3
-        expire_date = clean_kwargs.get("expire_date") or (product.expire_date if product else None)
-        if expire_date and expire_date <= timezone.localdate():
+        if product.expire_date and product.expire_date <= timezone.localdate():
             raise ValidationError("Cannot add or update product with an expiration date in the past")
         
         # Validation 4
         if shelf_alloc:
 
-            name = clean_kwargs.get("name") or (product.name if product else None)
             target_shelf = [item["shelf"] for item in shelf_alloc] # unpack with list comprehensive
-
-            existing_name = Product.objects.filter(name__iexact=name, shelves__in=target_shelf) #Case-insensitive check
+            existing_name = Product.objects.filter(name__iexact=product.name, shelves__in=target_shelf) #Case-insensitive check
 
             if product: # Only exclude if product actually exists btw
                 existing_name = existing_name.exclude(id=product.id) # "Look for other products with this name, but ignore the product I am currently editing"
             if existing_name.exists():
-                raise ValidationError(f"A product named '{name}' already exists on this shelf")
+                raise ValidationError(f"A product named '{product.name}' already exists on this shelf")
 
         # M2M Validations
-        total_qty = clean_kwargs.get("quantity") or (product.quantity if product else 0)
         if shelf_alloc is not None:
             # Validation 5
             if len(shelf_alloc) == 0:
@@ -103,29 +107,20 @@ class ProductService():
 
             # Validation 6
             qty_pershelf = [item.get("quantity", 0) for item in shelf_alloc] #safely return 0
-            if total_qty != sum(qty_pershelf):
-                raise ValidationError(f"The total quantity of a product ({total_qty}) must match the number of product to be assign in each shelves")
-            
+            if product.quantity != sum(qty_pershelf):
+                raise ValidationError(f"The total quantity of a product ({product.quantity}) must match the number of product to be assign in each shelves")
 
-        # pop the custom field out, bcoz Product model dont have this field (this belong to 3rd table)
-        allocations_data = clean_kwargs.pop("shelf_allocations", None)
-
-        if product:
-            for key, value in clean_kwargs.items():   # Step 1: Loop through all valued fields from clean kwargs
-                setattr(product, key, value)          # Step 2: Assign the valued field directly to the object (product.field = value)
-        else:
-            product = Product(**clean_kwargs)
-
-        product.save() # save product first so it gets a database ID for the 3rd table
-
-        if allocations_data:
-            ProductService._increase_stock(product=product, shelf_alloc=allocations_data)
-            
+        # must save product first so it gets a database ID for the intermed table 
+        # unlike during decrease, in there no need to save first bcoz prod.id already exist
         product.save()
+
+        ProductService._increase_stock(product=product, shelf_alloc=shelf_alloc)
+            
         return product
     
 
     @staticmethod
+    @transaction.atomic
     def delete_product(product: Product):
 
         prod_shelf = product.shelf_allocations.all() # return queryset, not list of dict
@@ -149,19 +144,19 @@ class ProductService():
 class ShelfService():
 
     @staticmethod
-    def save_shelf(shelf: Shelf | None=None, **kwargs):
-        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-
-        if shelf and shelf.max_shelf_capacity < shelf.current_stock:
-            raise ValidationError(f"Cannot change the max capacity to be lower than current stock ({shelf.current_stock})")
-
+    def save_shelf(*, shelf: Shelf | None=None, **kwargs):
+        # update / create object in RAM
         if shelf:
-            for key, value in clean_kwargs.items():      
+            for key, value in kwargs.items():      
                 setattr(shelf, key, value)         
         else:
-            shelf = Shelf(**clean_kwargs)
+            shelf = Shelf(**kwargs)
 
-        shelf.save()
+        # validate the object saved in RAM
+        if shelf.max_shelf_capacity < shelf.current_stock:
+            raise ValidationError(f"Cannot change the max capacity to be lower than current stock ({shelf.current_stock})")
+
+        shelf.save() # commit to DB
         return shelf
 
 
@@ -172,7 +167,14 @@ class SalesService():
         # feature: automatically switch the to another shelf if one shelf (that carries a spesific prod) is empty
         quantity_wanted = sales.quantity_sold
 
-        for alloc in sales.product.shelf_allocations.order_by("id"):  # access all shelves where this spesific product located and order by ID
+        # Lock shelf allocations & related shelves to prevent race conditions
+        allocations = (
+            ProductShelf.objects.select_for_update()
+            .select_related("shelf")
+            .filter(product=sales.product)
+            .order_by("id")
+        )
+        for alloc in allocations:
             if quantity_wanted <= 0:
                 break
 
@@ -198,39 +200,34 @@ class SalesService():
 
 
     @staticmethod
+    @transaction.atomic # needed for select_for_update() to work
     def save_sales(**kwargs):
-        clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-
-        product = clean_kwargs.get("product") 
-        quantity_sold = clean_kwargs.get("quantity_sold", 0)
-
-        if product and (quantity_sold > product.quantity): # use quantity bcoz it represent all quanty of a product, if i use shelf make no sense, bcoz a prod can be in multip shelfs
-            raise ValidationError(f"Not enough stock for {product.name}. Remaining stock: {product.quantity} ")
-
-        if quantity_sold <= 0:
-            raise ValidationError("Quantity sold must be greater than zero.")
         
-        if product and product.expire_date <= timezone.localdate():
-            raise ValidationError("Cannot sell expired products.")
-
         # Instantiate in RAM, dont save directly by 'Sales.object.create'
-        sales = Sales(**clean_kwargs) 
+        sales = Sales(**kwargs) 
 
-        # logic to auto-create 'total_revenue' field
-        if sales:
-            sales.total_revenue = quantity_sold * sales.product.selling_price
+        # if multiple cashier sells the same product at the same moment (delay for few milisecond till the first finish)
+        # only lock 'product' part bcoz 2 ppl can reads the same product in db, but post different 'quantity_sold'
+        sales.product = Product.objects.select_for_update().get(pk=sales.product.pk)
 
-        sales.save() # save first before decrease it
+        if sales.quantity_sold <= 0:
+            raise ValidationError("Quantity sold must be greater than zero.")
+        if sales.product.expire_date <= timezone.localdate():
+            raise ValidationError("Cannot sell expired products.")
+        if sales.quantity_sold > sales.product.quantity: # use quantity bcoz it represent all quanty of a product, if i use shelf make no sense, bcoz a prod can be in multip shelfs
+            raise ValidationError(f"Not enough stock for {sales.product.name}. Remaining stock: {sales.product.quantity} ")
 
-        SalesService._decrease_stock(sales=sales)
-            
+        sales.total_revenue = sales.quantity_sold * sales.product.selling_price # logic to auto-create 'total_revenue' field
+
+        SalesService._decrease_stock(sales=sales) # still using what stored in RAM
+        sales.save()
         return sales
 
 
 class OrderPredictionService():
 
     @staticmethod
-    async def fetch_single_prediction(product:Product, lookback_days:None, target_days:None):
+    async def fetch_single_prediction(product:Product, lookback_days=None, target_days=None): # assign lookback & target as 'None' makes them Optional param
         """ Sends a single product data to FastAPI and returns the prediction numbers. """
 
         # If client didn't send a parameter, use .env default
@@ -248,11 +245,11 @@ class OrderPredictionService():
         if product.is_expired == True:
             raise ValidationError("Cannot predict expired product")
 
-        # FastAPI URL endpoint
-        # will automatically switch to docker DNS if run by docker
+        # FastAPI URL endpoint (will automatically switch to docker DNS if run by docker)
         fastapi_host = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001") # in docker, "os.getenv" will refer to env section in d-compose 
         url = f"{fastapi_host}/api/predict-single"
 
+        # --- Read from DB ---
         # find out how many product is sold based on each different types in the last ... days
         demand = await Sales.objects \
             .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback)) \
@@ -267,6 +264,7 @@ class OrderPredictionService():
             "target_days_prediction": int(target)
         }
 
+        # --- External Network Call ---
         try:
             async with httpx.AsyncClient() as client: # 1 call = 1 connection setup per product
                 response = await client.post(url, json=payload, timeout=5) # send the payload data to target URL to be processed within 5 seconds
@@ -293,7 +291,7 @@ class OrderPredictionService():
 
 
     @staticmethod 
-    async def fetch_batch_prediction(lookback_days:None, target_days=None):
+    async def fetch_batch_prediction(lookback_days=None, target_days=None):
         """ Sends all products data to FastAPI and returns the prediction numbers. """
 
         # If client didn't send a parameter, use .env default
@@ -372,7 +370,7 @@ class OrderPredictionService():
 
 
     @staticmethod
-    async def get_raw_batch_predictions(lookback_days:None, target_days=None):
+    async def get_raw_batch_predictions(lookback_days=None, target_days=None):
         """ 
         Fetches real-time predictions for all products. Does not save result in DB.
         Returns a dictionary mapping: { product_id: predicted_demand }
@@ -489,7 +487,7 @@ class SpoilageNotificationService():
                     show_result.append({ # indent to this level so it only run when there new spoilage fouund
                         "product_id": prod.id,
                         "product_name": prod.name,
-                        "spoilage_risk": spoilage_risk,
+                        "spoilage_risk": round(spoilage_risk),
                         "level": SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
                     })
 
@@ -545,6 +543,7 @@ class TelegramBot():
         except Exception as e:
             logger.error(f"Failed to send Telegram alert: {e}")
             return False
+
 
 
 class TaskScheduler():
