@@ -15,6 +15,7 @@ redis = "*"
 drf-spectacular = "*"
 adrf = "*"
 django-cors-headers = "*"
+django-celery-beat = "*"
 
 [dev-packages]
 
