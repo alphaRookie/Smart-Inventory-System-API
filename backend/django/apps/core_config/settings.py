@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'inventory.apps.InventoryConfig',
     'drf_spectacular',
     'corsheaders',
+    'django_celery_beat',
     # celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
 ]
 
@@ -138,31 +139,8 @@ CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
 CELERY_ACCEPT_CONTENT = ['json'] # which format to accept
 CELERY_TASK_SERIALIZER = 'json'
 
-
-
-from celery.schedules import crontab # crontab has options: run at exact times of the day, specific days of the week, or precise calendar dates
-
-# custom hour & minutes, also day gap of running
-run_inventory_check_every = int(os.getenv("RUN_INVENTORY_CHECK_EVERY", 1))
-run_spoilage_check_every = int(os.getenv("RUN_SPOILAGE_CHECK_EVERY", 1))
-
-h_inv_check = int(os.getenv("H_INV_CHECK", 1))
-m_inv_check = int(os.getenv("M_INV_CHECK", 0))
-
-h_spoil_check = int(os.getenv("H_SPOIL_CHECK", 1))
-m_spoil_check = int(os.getenv("M_SPOIL_CHECK", 30))
-
-CELERY_BEAT_SCHEDULE = { # when to run task
-    'run-predictions-midnight': {
-        'task': 'inventory.tasks.run_inventory_check',
-        'schedule': crontab(hour=h_inv_check, minute=m_inv_check, day_of_month=f"*/{run_inventory_check_every}"),  # Runs every .. day at 1:00 AM
-    },
-    'run-spoilage-midnight': {
-        'task': 'inventory.tasks.run_spoilage_check',
-        'schedule': crontab(hour=h_spoil_check, minute=m_spoil_check, day_of_month=f"*/{run_spoilage_check_every}"), # Runs every .. day at 1:30 AM
-    },
-}
-
+# Configure Celery to use Django's database as the beat scheduler
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 # -------------------- DRF --------------------
