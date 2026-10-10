@@ -20,5 +20,8 @@ urlpatterns = [
 
     path("spoilage-check", views.SpoilageCheckView.as_view(), name="spoilage-check"),
     path("spoilage-notif", views.SpoilageNotificationAPIView.as_view(), name="spoilage-check"),
-    path("spoilage-notif/<int:pk>", views.SpoilageNotificationItemAPIView.as_view(), name="spoilage-check-detail")
+    path("spoilage-notif/<int:pk>", views.SpoilageNotificationItemAPIView.as_view(), name="spoilage-check-detail"),
+
+    path('task-scheduler', views.TaskSchedulerView.as_view(), name='task-scheduler-list'),
+    path('task-scheduler/<int:pk>', views.TaskSchedulerView.as_view(), name='task-scheduler-detail'),
 ]
