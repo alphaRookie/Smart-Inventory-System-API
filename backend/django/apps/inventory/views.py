@@ -257,6 +257,7 @@ class SpoilageNotificationAPIView(APIView):
     
 @extend_schema_view(
     get=extend_schema(summary="Retrieves a specific result of Spoilage Check by ID", responses={200: SpoilageNotificationSerializer}),
+    patch=extend_schema(summary="Marks a Spoilage Check notification as read", responses={200: SpoilageNotificationSerializer}),
     delete=extend_schema(summary="Deletes a Spoilage Check result by ID", responses={204: None})
 )
 class SpoilageNotificationItemAPIView(APIView):
@@ -264,6 +265,13 @@ class SpoilageNotificationItemAPIView(APIView):
     def get(self, request, pk):
         spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk) 
         serializer = SpoilageNotificationSerializer(spoilage_notif) 
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk)
+        spoilage_notif.is_read = True
+        spoilage_notif.save()
+        serializer = SpoilageNotificationSerializer(spoilage_notif)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk):
