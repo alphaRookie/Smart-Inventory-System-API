@@ -18,6 +18,8 @@ import OrderPredHistoryDetail from './pages/orderpred/OrderPredHistoryDetail';
 import SpoilCheckPage from './pages/spoilcheck/SpoilCheckPages';
 import SpoilCheckDetailPage from './pages/spoilcheck/SpoilCheckDetailPage';
 
+import TaskScheduler from './pages/settings/TaskScheduler';
+
 export default function App() {
   const [open, setOpen] = useState(false);
 
@@ -83,6 +85,10 @@ export default function App() {
                 Spoilage Check
               </Link>
 
+              <Link to="/scheduler" className="flex items-center text-gray-600 hover:text-indigo-600 transition-colors py-1 !-ml-2">
+                Scheduler
+              </Link>
+
             </div>
           </div>
         </nav>
@@ -102,6 +108,7 @@ export default function App() {
             <Route path="/orderpred/history/:id" element={<OrderPredHistoryDetail />} />
             <Route path="/spoilage" element={<SpoilCheckPage />} />
             <Route path="/spoilage/:id" element={<SpoilCheckDetailPage />} />
+            <Route path="/scheduler" element={<TaskScheduler />} />
           </Routes>
         </main>
       </div>
