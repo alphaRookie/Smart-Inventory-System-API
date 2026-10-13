@@ -7,9 +7,9 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from adrf.views import APIView # auto-recognize when async def mentioned
 
-from .models import Product, Shelf, Sales, OrderPrediction, SpoilageNotification
-from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageNotificationSerializer, TaskUpdateSerializer, TaskListSerializer
-from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageNotificationService, TaskScheduler
+from .models import Product, Shelf, Sales, OrderPrediction, SpoilageCheck, Notification
+from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageCheckSerializer, TaskUpdateSerializer, TaskListSerializer, NotificationSerializer
+from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageCheckService, TaskScheduler
 from django_celery_beat.models import PeriodicTask
 
 
@@ -17,6 +17,7 @@ from django_celery_beat.models import PeriodicTask
     get=extend_schema(summary="List all Products", responses={200: ProductSerializer(many=True)}),
     post=extend_schema(summary="Adds a New Product", request=ProductSerializer, responses={201: ProductSerializer})
 )
+# why APIView instead of ViewSet? it's more optimized for Service layer (can customize methods)
 class ProductAPIView(APIView):
 
     def get(self, request):
@@ -246,42 +247,34 @@ class BatchOrderPredictionView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary="List all results of Spoilage Check", responses={200: SpoilageNotificationSerializer(many=True)})
+    get=extend_schema(summary="List all results of Spoilage Check", responses={200: SpoilageCheckSerializer(many=True)})
 )
-class SpoilageNotificationAPIView(APIView):
+class SpoilageCheckAPIView(APIView):
 
     def get(self, request):
-        spoilage_notif = SpoilageNotification.objects.all().order_by('-created_at')
-        serializer = SpoilageNotificationSerializer(spoilage_notif, many=True)
+        spoilage_check = SpoilageCheck.objects.all().order_by('-created_at')
+        serializer = SpoilageCheckSerializer(spoilage_check, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 @extend_schema_view(
-    get=extend_schema(summary="Retrieves a specific result of Spoilage Check by ID", responses={200: SpoilageNotificationSerializer}),
-    patch=extend_schema(summary="Marks a Spoilage Check notification as read", responses={200: SpoilageNotificationSerializer}),
+    get=extend_schema(summary="Retrieves a specific result of Spoilage Check by ID", responses={200: SpoilageCheckSerializer}),
     delete=extend_schema(summary="Deletes a Spoilage Check result by ID", responses={204: None})
 )
-class SpoilageNotificationItemAPIView(APIView):
+class SpoilageCheckItemAPIView(APIView):
 
     def get(self, request, pk):
-        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk) 
-        serializer = SpoilageNotificationSerializer(spoilage_notif) 
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def patch(self, request, pk):
-        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk)
-        spoilage_notif.is_read = True
-        spoilage_notif.save()
-        serializer = SpoilageNotificationSerializer(spoilage_notif)
+        spoilage_check = get_object_or_404(SpoilageCheck, pk=pk) 
+        serializer = SpoilageCheckSerializer(spoilage_check) 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk):
-        spoilage_notif = get_object_or_404(SpoilageNotification, pk=pk)
-        spoilage_notif.delete()
+        spoilage_check = get_object_or_404(SpoilageCheck, pk=pk)
+        spoilage_check.delete()
         return Response({"message": "Notification message deleted"},status=status.HTTP_200_OK)
 
 
 @extend_schema_view(
-    post=extend_schema(summary="Runs the Spoilage check", request=SpoilageNotificationSerializer, responses={201: SpoilageNotificationSerializer})
+    post=extend_schema(summary="Runs the Spoilage check", request=SpoilageCheckSerializer, responses={201: SpoilageCheckSerializer})
 )
 class SpoilageCheckView(APIView):
     """ Optional action to manually triggers spoilage check (by default this automatically run by celery) """
@@ -293,7 +286,7 @@ class SpoilageCheckView(APIView):
         target_days_input = request.data.get("target_days_prediction")
         days_to_expire = request.data.get("days_to_expire")
 
-        ai_data = await SpoilageNotificationService.check_spoilage(lookback_days=lookback_days_input, target_days=target_days_input, days_to_expire=days_to_expire)
+        ai_data = await SpoilageCheckService.check_spoilage(lookback_days=lookback_days_input, target_days=target_days_input, days_to_expire=days_to_expire)
 
         if ai_data is None:
             return Response({"error_msg": "Could not contact the FastAPI AI prediction engine."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -339,3 +332,23 @@ class TaskSchedulerView(APIView):
             "status": "success",
             "message": "Schedule updated successfully."
         }, status=status.HTTP_200_OK)
+
+
+
+class NotificationView(APIView):
+    def get(self, request):
+        notifications = Notification.objects.all().order_by('-created_at')
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
+
+class NotificationItemAPIView(APIView):
+    def patch(self, request, pk):
+        notif = get_object_or_404(Notification, pk=pk)
+        notif.is_read = True
+        notif.save()
+        return Response({"status": "marked as read"})
+
+    def delete(self, request, pk):
+        notif = get_object_or_404(Notification, pk=pk)
+        notif.delete()
+        return Response({"message": "Notification deleted"}, status=status.HTTP_200_OK)
