@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageCheck, ProductShelf, Notification
 from django_celery_beat.models import PeriodicTask
 
 class ProductShelfSerializer(serializers.ModelSerializer):
@@ -44,6 +44,7 @@ class SalesSerializer(serializers.ModelSerializer):
         fields = ["id", "created_at", "product", "quantity_sold", "total_revenue", "product_obj"]
         read_only_fields = ["id", "total_revenue"]
 
+
 class OrderPredictionSerializer(serializers.ModelSerializer): 
     product_obj = ProductSerializer(source='product', read_only=True)
     class Meta: 
@@ -51,11 +52,12 @@ class OrderPredictionSerializer(serializers.ModelSerializer):
         fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing", "product_obj"]
         read_only_fields = ["id", "product", "demand_prediction", "order_suggestion", "target_timing"] # put all bcoz AI who inputs it, not user
 
-class SpoilageNotificationSerializer(serializers.ModelSerializer):
+
+class SpoilageCheckSerializer(serializers.ModelSerializer):
     product_obj = ProductSerializer(source='product', read_only=True)
     class Meta:
-        model = SpoilageNotification
-        fields = ["id", "product", "message", "level", "is_read", "created_at", "product_obj"]
+        model = SpoilageCheck
+        fields = ["id", "product", "message", "level", "created_at", "product_obj"]
         read_only_fields = ["id", "created_at"]
 
 
@@ -74,3 +76,11 @@ class TaskListSerializer(serializers.ModelSerializer):
     class Meta:
         model = PeriodicTask
         fields = ['id', 'name', 'task', 'enabled', 'hour', 'minute', 'day_of_month']
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    product_obj = ProductSerializer(source='product', read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = ['id', 'product', 'product_obj', 'category', 'message', 'level', 'is_read', 'created_at']
