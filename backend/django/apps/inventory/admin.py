@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Product, Sales, Shelf, OrderPrediction, ProductShelf, SpoilageNotification
+from .models import Product, Sales, Shelf, OrderPrediction, ProductShelf, SpoilageCheck, Notification
 
 
 class ProductShelfInline(admin.TabularInline):
@@ -53,8 +53,15 @@ class ProductShelfAdmin(admin.ModelAdmin):
     list_filter = ("product", "shelf")
 
 
-@admin.register(SpoilageNotification)
-class SpoilageNotificationAdmin(admin.ModelAdmin):
-    list_display = ("id", "product", "level", "is_read", "created_at")
+@admin.register(SpoilageCheck)
+class SpoilageCheckAdmin(admin.ModelAdmin):
+    list_display = ("id", "product", "level", "created_at")
     list_filter = ("product",)
     date_hierarchy = "created_at"
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'product', 'category', 'message', 'level', 'is_read', 'created_at')
+    list_filter = ('category', 'level')
+    date_hierarchy = 'created_at'
