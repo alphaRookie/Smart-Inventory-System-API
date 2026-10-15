@@ -1,4 +1,4 @@
-from .models import Product, Sales, Shelf, OrderPrediction, SpoilageNotification, ProductShelf
+from .models import Product, Sales, Shelf, OrderPrediction, SpoilageCheck, ProductShelf, Notification
 from datetime import timedelta, date, datetime
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, APIException
@@ -426,13 +426,14 @@ class OrderPredictionService():
 
 
 
-class SpoilageNotificationService():
+class SpoilageCheckService():
     @staticmethod
     async def check_spoilage(lookback_days=None, target_days=None, days_to_expire=None):
 
         notifications_count = 0
-        notif_list = []
         show_result = []
+        spoilage_records = []
+        notification_records = []
 
         # Get real-time predictions in memory (no OrderPrediction DB rows created)
         predictions = await OrderPredictionService.get_raw_batch_predictions(lookback_days, target_days)
@@ -444,9 +445,8 @@ class SpoilageNotificationService():
         days_to_expire = int(days_to_expire or os.getenv("DAYS_TO_EXPIRE", 14))
 
         # inner query: Find existing unread notifications subquery
-        notif_subquery = SpoilageNotification.objects.filter(
+        notif_subquery = SpoilageCheck.objects.filter(
             product=OuterRef('pk'), # "Find any unread notification where the product matches the outer product's ID"
-            is_read=False
         )
 
         # Outer query
@@ -472,33 +472,44 @@ class SpoilageNotificationService():
             
             else: # Spoilage risk detected!
                 if not prod.has_unread_notif: #type:ignore
-                    notif_list.append(
-                        SpoilageNotification( # Stored in Model Instance, not dict
-                            product = prod,
-                            level = SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
-                            message = (
-                                f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, Current stock is {stock_left}, but predicted demand is only {raw_predicted_demand}. "
-                                f"Estimated waste: {spoilage_risk} units. Consider running a promotion or discount"
-                            )
+                    
+                    risk_level = SpoilageCheck.Level.DANGER if spoilage_risk > 50 else SpoilageCheck.Level.WARNING
+                    msg_text = (
+                        f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, "
+                        f"Current stock is {stock_left}, but predicted demand is only {raw_predicted_demand}. Estimated waste: {int(spoilage_risk)} units."
+                    )
+
+                    # Append to SpoilageCheck history model
+                    spoilage_records.append(
+                        SpoilageCheck(
+                            product=prod,
+                            level=risk_level,
+                            message=msg_text
                         )
                     )
-                    notifications_count += 1
 
-                    show_result.append({ # indent to this level so it only run when there new spoilage fouund
-                        "product_id": prod.id,
-                        "product_name": prod.name,
-                        "spoilage_risk": round(spoilage_risk),
-                        "level": SpoilageNotification.Level.DANGER if spoilage_risk > 20 else SpoilageNotification.Level.WARNING,
-                    })
+                    # Append to the AppNotification inbox 
+                    notification_records.append(
+                        Notification(
+                            product=prod,
+                            category=Notification.Category.SPOILAGE,
+                            level=risk_level,
+                            message=msg_text
+                        )
+                    )
 
-        if notif_list:
+        # bulk both to database
+        if notification_records:
+            await Notification.objects.abulk_create(notification_records)
+
+        if spoilage_records:
             # 1. bulk save to DB
-            await SpoilageNotification.objects.abulk_create(notif_list) 
+            await SpoilageCheck.objects.abulk_create(spoilage_records) 
 
             # 2. Build phone notification message
             msg = (
                 f"🚨 <b>Spoilage Alert Triggered!</b>\n"
-                f"Created <b>{len(notif_list)}</b> new warning alerts.\n\n"
+                f"Created <b>{len(spoilage_records)}</b> new warning alerts.\n\n"
             )
             
             # Create notification message 
@@ -555,14 +566,14 @@ class TaskScheduler():
         DEFAULT_TASKS = [
             {
                 'name': 'run-spoilage-check',
-                'path': 'inventory.tasks.run_spoilage_check',
+                'path': 'inventory.tasks.run_auto_spoilage_check',
                 'hour': 0,
                 'minute': 0,
                 'every_n_days': 0,
             },
             {
                 'name': 'run-order-predictions',
-                'path': 'inventory.tasks.run_inventory_check',
+                'path': 'inventory.tasks.run_auto_orderpred_check',
                 'hour': 0,
                 'minute': 0,
                 'every_n_days': 0,
