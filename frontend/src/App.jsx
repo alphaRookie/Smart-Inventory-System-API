@@ -20,6 +20,7 @@ import SpoilCheckPage from './pages/spoilcheck/SpoilCheckPages';
 import SpoilCheckDetailPage from './pages/spoilcheck/SpoilCheckDetailPage';
 
 import TaskScheduler from './pages/settings/TaskScheduler';
+import DisplayNotif from './pages/settings/Notification';
 
 export default function App() {
   return (
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/spoilage/:id" element={<SpoilCheckDetailPage />} />
 
             <Route path="/scheduler" element={<TaskScheduler />} />
+            <Route path="/notification" element={<DisplayNotif />} />
           </Routes>
         </main>
       </div>
