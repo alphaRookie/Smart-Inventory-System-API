@@ -35,6 +35,18 @@ export default function SalesPage() {
     setSales(sales.filter((s) => s.id !== deletedId));
   };
 
+  // Group sales by their date (YYYY-MM-DD)
+  const groupedByDate = sales.reduce((groups, sale) => {
+    // override US date style to DD/MM/YYYY
+    const dateStr = new Date(sale.created_at).toLocaleDateString('en-GB');
+
+    if (!groups[dateStr]) {
+      groups[dateStr] = [];
+    }
+    groups[dateStr].push(sale);
+    return groups;
+  }, {});
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -83,15 +95,39 @@ export default function SalesPage() {
         </div>
 
         {/* Sales Cards Grid */}
-        <div className="grid grid-cols-1 gap-4">
-          {sales.map((sale) => (
-            <SalesCard 
-              key={sale.id} 
-              sale={sale} 
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        {Object.keys(groupedByDate).length === 0 ? (
+          <p className="text-gray-500 text-sm text-center py-8">No records found.</p>
+        ) : (
+          Object.entries(groupedByDate).map(([date, items]) => (
+            <div key={date} className="space-y-3">
+              
+              {/* Clear Date Header Separator */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-semibold border border-indigo-100 shadow-2xs">
+                  {/* Calendar Icon */}
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                  </svg>
+                  <span>{date}</span>
+                </div>
+                <div className="flex-1 h-[1px] bg-gray-200"></div>
+                <span className="text-xs text-gray-400 font-medium">{items.length} items</span>
+              </div>
+
+              {/* Cards Stack for that specific day */}
+              <div className="grid grid-cols-1 gap-3 pl-2 sm:pl-4 border-l-2 border-indigo-100">
+                {items.map((sale) => ( /* loop only through the `items` for this specific date group */
+                  <SalesCard 
+                    key={sale.id} 
+                    sale={sale} 
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+
+            </div>
+          ))
+        )}
       </div>
 
     </div>
