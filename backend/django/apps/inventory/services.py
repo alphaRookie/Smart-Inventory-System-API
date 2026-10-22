@@ -255,13 +255,17 @@ class OrderPredictionService():
             .filter(product=product, created_at__gte= timezone.now() - timedelta(days=lookback)) \
             .aaggregate(base_demand=Coalesce(Sum("quantity_sold"), 0)) # use async database query (aaggregate)
 
+        # Cold start check 
+        sales_count = await sync_to_async(product.sales_set.count)() #type:ignore
+
         # Request data to be sent to Fast api
         payload = {
             "product_id": product.id,
             "product_type": product.type,
             "base_demand": int(demand["base_demand"] / lookback), # divide by ... to get daily baseline
             "current_stock": int(product.quantity) if product else 0, # explicitly, bcoz from a web form, they usually come in as strings
-            "target_days_prediction": int(target)
+            "target_days_prediction": int(target),
+            "historical_sales": sales_count,
         }
 
         # --- External Network Call ---
@@ -283,6 +287,7 @@ class OrderPredictionService():
                     "predicted_demand": prediction_obj.demand_prediction,
                     "suggested_order": prediction_obj.order_suggestion
                 }
+            print(f"FastAPI Error Response ({response.status_code}): {response.text}")
             return None
         
         except Exception as e:
@@ -312,9 +317,11 @@ class OrderPredictionService():
         payload = [] # hold 'list' of data to be sent out to Fast Api
         
         # Inner Query: find out how much this product is sold in the last ... days (iterate each diff pk)
-        # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
         sales_subquery = Sales.objects \
-            .filter(product=OuterRef('pk'), created_at__gte=timezone.now() - timedelta(days=lookback)) \
+            .filter(
+                product=OuterRef('pk'), # "OuterRef('pk')" wait until the outer query gives a specific Product ID, then it find all sales matching that ID
+                created_at__gte=timezone.now() - timedelta(days=lookback)
+            ) \
             .values('product') \
             .annotate(total=Coalesce(Sum("quantity_sold"), 0)) \
             .values('total') # 1st values (to group all sales for this product).. 2nd values(to hand back result and throw away other sales column)
@@ -325,13 +332,21 @@ class OrderPredictionService():
             .annotate(base_demand=Coalesce(Subquery(sales_subquery), 0)) # Coalesce handles NULL when no sales happen yet for a product
 
         async for product in products:
+            # Check is_expired and quantity here in Python (where @property works perfectly)
+            if product.is_expired or product.quantity <= 0:
+                continue
+
+            # Cold start check 
+            sales_count = await sync_to_async(product.sales_set.count)() #type:ignore
+
             # Request data to be sent to Fast api (Stored in Dictionary)
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type, 
                 "base_demand": int(product.base_demand / lookback), # divide by ... to get daily baseline  #type:ignore
                 "current_stock": int(product.quantity), 
-                "target_days_prediction": int(target)
+                "target_days_prediction": int(target),
+                "historical_sales": sales_count,
             })
 
         # WRAP IT in a Dict to macth BatchPredictionRequest in main.py
@@ -362,6 +377,7 @@ class OrderPredictionService():
 
                 return response.json() # returning the raw JSON list from FastAPI sitting in Python memory (React need to render it)
 
+            print(f"FastAPI Error Response ({response.status_code}): {response.text}")
             return None
         
         except Exception as e:
@@ -396,12 +412,16 @@ class OrderPredictionService():
 
         payload = []
         async for product in products:
+            # Cold start check 
+            sales_count = await sync_to_async(product.sales_set.count)() #type:ignore
+
             payload.append({
                 "product_id": product.id,
                 "product_type": product.type,
                 "base_demand": int(product.base_demand / lookback), # type: ignore
                 "current_stock": int(product.quantity),
-                "target_days_prediction": int(target)
+                "target_days_prediction": int(target),
+                "historical_sales": sales_count,
             })
 
         custom_payload = {
@@ -419,6 +439,7 @@ class OrderPredictionService():
                     item["product_id"]: item["predicted_demand"] 
                     for item in response.json()
                 }
+            print(f"FastAPI Error Response ({response.status_code}): {response.text}")
             return None
         except Exception as e:
             print(f"Error fetching in-memory predictions: {str(e)}")
