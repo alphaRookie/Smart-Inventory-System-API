@@ -23,6 +23,7 @@ class PredictionRequest(BaseModel):
     base_demand: int
     current_stock: int
     target_days_prediction: int
+    historical_sales: int 
 
 # This is what FastAPI will give back to Django
 class PredictionResponse(BaseModel):
@@ -30,18 +31,26 @@ class PredictionResponse(BaseModel):
     predicted_demand: int
     suggested_order: int
 
-#load model
-model = joblib.load("../ml_model/weather_model.joblib")
-
+#load model (i set workdir at app/fast_api, so this jumps up once and goes into app/ml_model)
+model = joblib.load("../ml_model/weather_model.joblib") 
 
 # Single prediction Endpoint
 @app.post("/api/predict-single", response_model=PredictionResponse) # Assigns a spesific value to parameter
 async def get_inventory_prediction(request_data: PredictionRequest): # tells FastAPI what type a variable should be
+
+    # Cold start check to force predicted demand to 0 so it doesn't hallucinate on new added product
+    if request_data.historical_sales == 0:
+        return PredictionResponse(
+            product_id=request_data.product_id,
+            predicted_demand=0,
+            suggested_order=0,
+        )
+
     # 1. Fetch tomorrow's weather automatically
     weather_info = await get_local_weather(target_days=request_data.target_days_prediction) # pass target_days user wanted to weather.py file
     if not weather_info:
         raise HTTPException(status_code=500, detail="Failed to fetch forecast from OpenWeatherMap")
-        
+         
     # 2. Format product_type string into binary values (0 or 1) for the model
     cold_boost = 1 if request_data.product_type == "COLD_BOOST" else 0
     heat_boost = 1 if request_data.product_type == "HEAT_BOOST" else 0
@@ -90,6 +99,18 @@ async def get_bulk_inventory_predictions(request_data: BatchPredictionRequest): 
 
     # 2. Loop through every item in the incoming list
     for item in request_data.requests_list:
+        
+        # Cold start check to force predicted demand to 0 so it doesn't hallucinate on new added product
+        if item.historical_sales == 0:
+            results.append(
+                PredictionResponse(
+                    product_id=item.product_id,
+                    predicted_demand=0,
+                    suggested_order=0,
+                )
+            )
+            continue
+        
         cold_boost = 1 if item.product_type == "COLD_BOOST" else 0
         heat_boost = 1 if item.product_type == "HEAT_BOOST" else 0
         weather_neutral = 1 if item.product_type == "WEATHER_NEUTRAL" else 0
