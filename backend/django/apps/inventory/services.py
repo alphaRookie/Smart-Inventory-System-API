@@ -472,8 +472,16 @@ class SpoilageCheckService():
             
             else: # Spoilage risk detected!
                 if not prod.has_unread_notif: #type:ignore
-                    
-                    risk_level = SpoilageCheck.Level.DANGER if spoilage_risk > 50 else SpoilageCheck.Level.WARNING
+
+                    potential_financial_loss = spoilage_risk * float(prod.unit_cost)
+                    waste_percentage = (spoilage_risk / stock_left) if stock_left > 0 else 0
+
+                    # If money lost is over $n OR if n% of the stock will be expired
+                    if potential_financial_loss >= 100.00 or waste_percentage >= 0.30:
+                        risk_level = SpoilageCheck.Level.DANGER
+                    else:
+                        risk_level = SpoilageCheck.Level.WARNING
+
                     msg_text = (
                         f"Spoilage Risk Alert! '{prod.name}' expires in {prod.shelf_life} days, "
                         f"Current stock is {stock_left}, but predicted demand is only {raw_predicted_demand}. Estimated waste: {int(spoilage_risk)} units."
