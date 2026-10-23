@@ -16,6 +16,9 @@ drf-spectacular = "*"
 adrf = "*"
 django-cors-headers = "*"
 django-celery-beat = "*"
+django-allauth = "*"
+djangorestframework-simplejwt = "*"
+dj-rest-auth = "*"
 
 [dev-packages]
 
