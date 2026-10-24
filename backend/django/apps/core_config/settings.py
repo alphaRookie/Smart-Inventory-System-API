@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Points to project root folder where .env and manage.py live
 # call .parent 4 times bcoz .env located at 4th parent (root folder)
@@ -38,7 +39,7 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '*').split(
 
 
 # -------------------- Application definition --------------------
-
+# celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -46,13 +47,53 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
+    'django.contrib.sites', # required by Oauth2
+
+    # my apps
     'inventory.apps.InventoryConfig',
+    'users.apps.UsersConfig',
+
+    # core utility
+    'rest_framework',
+    'rest_framework.authtoken', # required by dj-rest-auth
     'drf_spectacular',
     'corsheaders',
     'django_celery_beat',
-    # celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
+
+    #JWT
+    'rest_framework_simplejwt.token_blacklist',
+
+    # Oauth2
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google', # more could be add like facebook etc
+
+    # The bridge package
+    'dj_rest_auth',
+    'dj_rest_auth.registration', # enables `/registration` endpoint
 ]
+
+SITE_ID = 1 # Required whenever 'django.contrib.sites' is used
+
+# Provide Google OAuth App credentials directly
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.environ.get('GOOGLE_CLIENT_ID'),
+            'secret': os.environ.get('GOOGLE_CLIENT_SECRET'),
+            'key': ''
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -63,6 +104,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core_config.urls'
@@ -98,6 +141,9 @@ DATABASES = {
         'PORT': os.environ['DB_PORT'],
     }
 }
+
+# force django to use my custom user
+AUTH_USER_MODEL = 'users.User'
 
 
 
@@ -143,12 +189,6 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
-# -------------------- DRF --------------------
-REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
-}
-
-
 
 # -------------------- Swagger & Redoc --------------------
 SPECTACULAR_SETTINGS = {
@@ -167,3 +207,31 @@ cors_origins_raw = os.getenv(
 )
 # cleans up accidental spaces and trailing commas
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+
+
+
+# -------------------- Auth --------------------
+
+# Tell dj-rest-auth to use JWT tokens
+REST_USE_JWT = True
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+# Account Settings for AllAuth
+ACCOUNT_LOGIN_METHODS = {'email'} # use email instead username
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*'] # `*` means required
+
