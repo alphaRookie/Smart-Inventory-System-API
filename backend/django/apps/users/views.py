@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny 
 from typing import cast
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -8,6 +9,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import User
 from .serializers import WriteModelSerializer, WriteNonModelSerializer, ReadUserSerializer
 from .services import UserService
+from .permissions import IsAccOwner, IsManager
 
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
@@ -24,6 +26,7 @@ class GoogleLogin(SocialLoginView):
 )
 # allow spesific logged-in user to see 'his own' profile, also update it
 class UserProfileAPIView(APIView):
+    permission_classes = [IsAccOwner] 
     
     def get(self, request):
         serializer = ReadUserSerializer(request.user) #we use `request.user` bcoz they already logged-in
@@ -53,6 +56,7 @@ class UserProfileAPIView(APIView):
     post=extend_schema(summary="To register an Account", request=WriteModelSerializer, responses={201: WriteModelSerializer})
 )
 class RegisterUserAPIView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = WriteModelSerializer(data=request.data)
@@ -79,13 +83,14 @@ class RegisterUserAPIView(APIView):
     post=extend_schema(summary="Login to a Registered Account", description="Authenticate a user with email and password to receive Bearer tokens.", request=WriteNonModelSerializer, responses={200: WriteNonModelSerializer})
 )
 class LoginUserAPIView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = WriteNonModelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict, serializer.validated_data) # To shut pylance complaint
         
-        login_user = cast(User, UserService.authenticate_user(# cast will catch typo error 
+        login_user = cast(User, UserService.authenticate_user(# cast will catch typo error like "print(login_user.is_cinema_vp)"
             **validated_data
         ))
 
@@ -103,6 +108,7 @@ class LoginUserAPIView(APIView):
     post=extend_schema(summary="Log-out from an Account")
 )
 class LogoutUserAPIView(APIView): # This logs out the refresh_token, not access_toke
+    permission_classes = [IsAccOwner]
 
     def post(self, request):
         try:
