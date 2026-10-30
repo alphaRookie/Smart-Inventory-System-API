@@ -4,13 +4,14 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404, aget_object_or_404
 from typing import cast
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from django_celery_beat.models import PeriodicTask
 
 from adrf.views import APIView # auto-recognize when async def mentioned
 
 from .models import Product, Shelf, Sales, OrderPrediction, SpoilageCheck, Notification
 from .serializers import ProductSerializer, ShelfSerializer, SalesSerializer, OrderPredictionSerializer, SpoilageCheckSerializer, TaskUpdateSerializer, TaskListSerializer, NotificationSerializer
 from .services import ProductService, ShelfService, SalesService, OrderPredictionService, SpoilageCheckService, TaskScheduler
-from django_celery_beat.models import PeriodicTask
+from .permissions import IsManagerOrWorker, IsManager
 
 
 @extend_schema_view(
@@ -19,6 +20,7 @@ from django_celery_beat.models import PeriodicTask
 )
 # why APIView instead of ViewSet? it's more optimized for Service layer (can customize methods)
 class ProductAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request):
         product = Product.objects.all().order_by('id')
@@ -48,6 +50,7 @@ class ProductAPIView(APIView):
     delete=extend_schema(summary="Deletes a Product by ID", responses={204: None})
 )
 class ProductItemAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request, pk):
         product = get_object_or_404(Product, pk=pk) 
@@ -79,6 +82,7 @@ class ProductItemAPIView(APIView):
     post=extend_schema(summary="Adds a New Shelf", request=ShelfSerializer, responses={201: ShelfSerializer})
 )
 class ShelfAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request):
         shelf = Shelf.objects.all().order_by('id')
@@ -103,6 +107,7 @@ class ShelfAPIView(APIView):
     delete=extend_schema(summary="Deletes a Shelf by ID",responses={204: None})
 )
 class ShelfItemAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request, pk):
         shelf = get_object_or_404(Shelf, pk=pk) 
@@ -135,6 +140,7 @@ class ShelfItemAPIView(APIView):
     post=extend_schema(summary="Adds a New Sale", request=SalesSerializer, responses={201: SalesSerializer})
 )
 class SalesAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request):
         sales = Sales.objects.all().order_by('-created_at')
@@ -158,6 +164,7 @@ class SalesAPIView(APIView):
     delete=extend_schema(summary="Deletes a Sales by ID", responses={204: None})
 )
 class SalesItemAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
 
     def get(self, request, pk):
         sales = get_object_or_404(Sales, pk=pk) 
@@ -176,6 +183,7 @@ class SalesItemAPIView(APIView):
     get=extend_schema(summary="List all Predicted Orders", responses={200: OrderPredictionSerializer(many=True)}),
 )
 class OrderPredictionAPIView(APIView):
+    permission_classes = [IsManager]
 
     def get(self, request):
         order_prediction = OrderPrediction.objects.all().order_by('-id')
@@ -187,6 +195,7 @@ class OrderPredictionAPIView(APIView):
     delete=extend_schema(summary="Deletes a Predicted order by ID", responses={204: None})
 )
 class OrderPredictionItemAPIView(APIView):
+    permission_classes = [IsManager]
 
     def get(self, request, pk):
         order_prediction = get_object_or_404(OrderPrediction, pk=pk) 
@@ -204,6 +213,7 @@ class OrderPredictionItemAPIView(APIView):
 )
 class SingleOrderPredictionView(APIView):
     """ View that triggers the AI prediction for a specific product and displays it on the dashboard """
+    permission_classes = [IsManager]
 
     async def post(self, request, product_id):
         product = await aget_object_or_404(Product, id=product_id) 
@@ -231,6 +241,7 @@ class SingleOrderPredictionView(APIView):
 )
 class BatchOrderPredictionView(APIView):
     """ Optional action to manually triggers the AI prediction for all products (by default this automatically run by celery) """
+    permission_classes = [IsManager]
 
     async def post(self, request):
         # Extract user inputs from request payload
@@ -250,6 +261,7 @@ class BatchOrderPredictionView(APIView):
     get=extend_schema(summary="List all results of Spoilage Check", responses={200: SpoilageCheckSerializer(many=True)})
 )
 class SpoilageCheckAPIView(APIView):
+    permission_classes = [IsManager]
 
     def get(self, request):
         spoilage_check = SpoilageCheck.objects.all().order_by('-created_at')
@@ -261,6 +273,7 @@ class SpoilageCheckAPIView(APIView):
     delete=extend_schema(summary="Deletes a Spoilage Check result by ID", responses={204: None})
 )
 class SpoilageCheckItemAPIView(APIView):
+    permission_classes = [IsManager]
 
     def get(self, request, pk):
         spoilage_check = get_object_or_404(SpoilageCheck, pk=pk) 
@@ -278,6 +291,7 @@ class SpoilageCheckItemAPIView(APIView):
 )
 class SpoilageCheckView(APIView):
     """ Optional action to manually triggers spoilage check (by default this automatically run by celery) """
+    permission_classes = [IsManager]
 
     async def post(self, request):
 
@@ -295,7 +309,12 @@ class SpoilageCheckView(APIView):
 
 
 
+@extend_schema_view(
+    patch=extend_schema(summary="To enable/disable and change timing of task automation", request=TaskUpdateSerializer, responses={201: TaskUpdateSerializer})
+)
 class TaskSchedulerView(APIView):
+    permission_classes = [IsManager]
+
     def get(self, request):
         # 1. Lazy seeding: Ensure default tasks exist in DB
         TaskScheduler.seed_default_tasks()
@@ -335,13 +354,20 @@ class TaskSchedulerView(APIView):
 
 
 
+@extend_schema_view(
+    patch=extend_schema(summary="To mark notification as Read", request=NotificationSerializer, responses={201: NotificationSerializer})
+)
 class NotificationView(APIView):
+    permission_classes = [IsManagerOrWorker]
+
     def get(self, request):
         notifications = Notification.objects.all().order_by('-created_at')
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data)
 
 class NotificationItemAPIView(APIView):
+    permission_classes = [IsManagerOrWorker]
+    
     def patch(self, request, pk):
         notif = get_object_or_404(Notification, pk=pk)
         notif.is_read = True
