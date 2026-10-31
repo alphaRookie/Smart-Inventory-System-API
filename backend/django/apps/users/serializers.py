@@ -70,6 +70,28 @@ class WriteModelSerializer(serializers.ModelSerializer):
         return data
 
 
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+    confirm_password = serializers.CharField(required=True)
+
+    # Field-Level Validation (validate_<field_name>)
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        # Check if the old password typed by user is correct
+        if not user.check_password(value):
+            raise serializers.ValidationError("Your old password was entered incorrectly.")
+        return value
+
+    # Object-Level Validation (validate) --to compare multiple fields against each other.
+    def validate(self, data):
+        # Check if new password and confirmation match
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError({
+                "confirm_password": ["The two password fields didn't match."]
+            })
+        return data
+
 
 # Focuses on displaying data
 class ReadUserSerializer(serializers.ModelSerializer):
