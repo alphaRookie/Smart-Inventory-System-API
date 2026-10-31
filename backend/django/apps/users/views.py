@@ -5,9 +5,10 @@ from rest_framework.permissions import AllowAny
 from typing import cast
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from django.contrib.auth.models import update_last_login  
 
 from .models import User
-from .serializers import WriteModelSerializer, WriteNonModelSerializer, ReadUserSerializer
+from .serializers import WriteModelSerializer, WriteNonModelSerializer, ReadUserSerializer,  ChangePasswordSerializer
 from .services import UserService
 from .permissions import IsAccOwner, IsManager
 
@@ -50,6 +51,23 @@ class UserProfileAPIView(APIView):
             "message": "Profile updated",
             "user": ReadUserSerializer(update_user).data 
         }, status=status.HTTP_200_OK)
+
+
+@extend_schema(summary="Change User Password", request=ChangePasswordSerializer, responses={200: {"description": "Password changed successfully"}})
+class PasswordChangeAPIView(APIView):
+    permission_classes = [IsAccOwner]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data)
+
+        user = request.user
+        # Hash and set the new password safely
+        user.set_password(validated_data['new_password'])
+        user.save()
+
+        return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
         
 
 @extend_schema_view(
@@ -95,6 +113,9 @@ class LoginUserAPIView(APIView):
         ))
 
         refresh = RefreshToken.for_user(login_user)
+
+        # update 'last_login' field from built-in django model
+        update_last_login(User, login_user)
 
         return Response({
             "message": "Login successful",
