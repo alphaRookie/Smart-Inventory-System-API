@@ -22,10 +22,11 @@ class WriteNonModelSerializer(serializers.Serializer):
 
 class WriteModelSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True) # dont show it when display result to user
+    confirm_password = serializers.CharField(write_only=True) # dont show it when display result to user
 
     class Meta:
         model = User
-        fields = ["email", "password", "phone_number", "username"]
+        fields = ["email", "password", "confirm_password", "phone_number", "username"]
 
     def validate_email(self, value):
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -35,8 +36,8 @@ class WriteModelSerializer(serializers.ModelSerializer):
         return value
 
     def validate_username(self, value):
-        if len(value) < 5:
-            raise DRFValidationError("Username must be atleast 5 character")
+        if len(value) < 3:
+            raise DRFValidationError("Username must be atleast 3 character")
         if value.isdigit():
             raise DRFValidationError("Value cannot be only numbers")
         return value
@@ -49,17 +50,35 @@ class WriteModelSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone_number(self, value):
+        # optional: If the field is empty or blank, skip validation
+        if not value or not str(value).strip():
+            return value
+
         # Allows optional '+' at the start, spaces, and dashes, with 10 to 15 digits
         phone_regex = r'^\+?[\d\s\-]{10,15}$'
         
         if not re.match(phone_regex, value):
             raise DRFValidationError("Please enter a valid phone number")
         return value
-    
+
+    def validate(self, data):
+        # data is a dictionary containing all form fields
+        if data.get('password') != data.get('confirm_password'):
+            raise serializers.ValidationError({
+                "confirm_password": "The two password fields didn't match."
+            })
+        return data
+
+
 
 # Focuses on displaying data
 class ReadUserSerializer(serializers.ModelSerializer):
+    # This turns Django groups (objects) into a clean list of names like ["Manager"]
+    groups = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field='name'
+    )
+
     class Meta:
         model = User
-        fields = ["id", "email", "username", "phone_number", "last_login"]
+        fields = ["id", "email", "username", "phone_number", "date_joined", "last_login", "groups", "is_staff", "is_superuser"]
         read_only_fields = ["id"]
