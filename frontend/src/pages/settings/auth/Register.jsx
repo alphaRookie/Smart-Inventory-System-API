@@ -132,7 +132,7 @@ export default function RegisterPage() {
           </label>
           <div className="relative">
             <input
-              type='password'
+              type={showPassword ? 'text' : 'password'}
               name="password"
               required
               value={formData.password}
@@ -167,7 +167,7 @@ export default function RegisterPage() {
           </label>
           <div className="relative">
             <input
-              type='password'
+              type={showConfirmPassword ? 'text' : 'password'}
               name="confirm_password"
               required
               value={formData.confirm_password}

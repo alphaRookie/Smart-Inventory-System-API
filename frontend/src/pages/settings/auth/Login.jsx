@@ -102,7 +102,7 @@ export default function LoginPage() {
           </div>
           <div className="relative">
             <input
-              type='password'
+              type={showPassword ? 'text' : 'password'}
               name="password"
               required
               value={formData.password}
