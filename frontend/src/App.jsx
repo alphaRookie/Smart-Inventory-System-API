@@ -26,6 +26,7 @@ import DisplayNotif from './pages/settings/Notification';
 
 import LoginPage from './pages/settings/auth/Login';
 import RegisterPage from './pages/settings/auth/Register';
+import ProfilePage from './pages/settings/Profile';
 
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
 
             {/* Open to all logged-in users (newly registered acc or no role yet) */}
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
 
             {/* Worker or Manager only */}
             <Route element={<RoleProtectedRoute allowedGroups={['Manager', 'Worker']} />}>
