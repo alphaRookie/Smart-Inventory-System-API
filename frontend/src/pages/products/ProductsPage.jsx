@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import API from '../../api/axios';
 import ProductForm from '../../components/products/ProductForm';
 import ProductCard from '../../components/products/ProductCard';
+import { isManager, isSuperUser } from '../../utils/Permissions';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]); // Holds the list of product obj fetched from backend. Starts as an empty list
@@ -65,7 +66,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Add Button */}
-        {!showForm && (
+        {!showForm && (isManager() || isSuperUser()) && (
           <button 
             onClick={handleOpenAddForm} 
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
@@ -76,7 +77,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Create Form Display Card */}
-      {showForm && (
+      {showForm && (isManager() || isSuperUser()) && (
         <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md space-y-4">
           <ProductForm 
             shelves={shelves} 

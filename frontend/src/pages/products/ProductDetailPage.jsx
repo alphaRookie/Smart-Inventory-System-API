@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import API from '../../api/axios';
-import ProductForm from '../../components/products/ProductForm'; 
+import ProductForm from '../../components/products/ProductForm';
+import { isManager, isSuperUser } from '../../utils/Permissions'; 
 
 export default function ProductDetailPage() {
   const { id } = useParams(); // Grabs the dynamic :id parameter from the URL path (e.g., /products/31)
@@ -53,21 +54,23 @@ export default function ProductDetailPage() {
       <div className="flex items-center justify-between bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
         <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
         
-        {/* Button to toggle edit mode on and off */}
-        <button 
-          onClick={() => setIsEditing(!isEditing)} 
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            isEditing 
-              ? 'bg-gray-200 hover:bg-gray-300 text-gray-800' 
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
-          }`}
-        > 
-          {isEditing ? 'Cancel Edit' : 'Edit Product'}
-        </button>
+        {/* Button to toggle edit mode (Only for managers and superuser) */}
+        {(isManager() || isSuperUser()) && (
+          <button 
+            onClick={() => setIsEditing(!isEditing) } 
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              isEditing 
+                ? 'bg-gray-200 hover:bg-gray-300 text-gray-800' 
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+            }`}
+          > 
+            {isEditing ? 'Cancel Edit' : 'Edit Product'}
+          </button>
+        )}
       </div>
 
       {/* Conditional Rendering: Render form component if editing, else show product details */}
-      {isEditing ? (
+      {isEditing ? (isManager() || isSuperUser()) && (
         /* Reuses existing ProductForm component with initialData pre-filled */
         <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md">
           <ProductForm 
