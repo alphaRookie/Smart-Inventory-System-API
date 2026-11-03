@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import API from '../../api/axios';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { isManager, isSuperUser } from '../../utils/Permissions';
 
 export default function ShelfCard({ shelf, onDelete }) { // these 2 are props received
   const [isDeleting, setIsDeleting] = useState(false);
@@ -50,12 +51,14 @@ export default function ShelfCard({ shelf, onDelete }) { // these 2 are props re
             </button>
           </Link>
 
-          <button 
-            onClick={() => setShowModal(true)} 
-            className="text-sm font-medium text-rose-600 hover:text-rose-700 transition-colors"
-          >
-            Delete
-          </button>
+          {( isManager() || isSuperUser()) && (
+            <button 
+              onClick={() => setShowModal(true)} 
+              className="text-sm font-medium text-rose-600 hover:text-rose-700 transition-colors"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 

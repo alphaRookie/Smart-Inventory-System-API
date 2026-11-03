@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import API from '../../api/axios';
 import ShelfForm from '../../components/shelves/ShelfForm';
 import ShelfCard from '../../components/shelves/ShelfCard';
+import { isManager, isSuperUser } from '../../utils/Permissions';
 
 export default function ShelvesPage() {
   const [shelves, setShelves] = useState([]);
@@ -49,7 +50,7 @@ export default function ShelvesPage() {
         </div>
 
         {/* Add Button */}
-        {!showForm && (
+        {!showForm && ( isManager() || isSuperUser()) && (
           <button 
             onClick={() => setShowForm(true)} 
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
@@ -60,7 +61,7 @@ export default function ShelvesPage() {
       </div>
 
       {/* Create Form Display Card */}
-      {showForm && (
+      {showForm && ( isManager() || isSuperUser()) && (
         <div className="bg-white border-2 border-indigo-500 rounded-lg p-6 shadow-md space-y-4">
           <ShelfForm 
             shelves={shelves} 
