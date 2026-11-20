@@ -19,6 +19,7 @@ django-celery-beat = "*"
 django-allauth = "*"
 djangorestframework-simplejwt = "*"
 dj-rest-auth = "*"
+cryptography = "*"
 
 [dev-packages]
 
