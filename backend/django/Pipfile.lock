@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "32831da7956cdc43968c2d1b150dccb69aeef00ea560ca968bc48c2d63babded"
+            "sha256": "33a05c248494124d8ecdecda13f743c52c80bb0b6746974ef24c4b18de707227"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -408,12 +408,12 @@
         },
         "django": {
             "hashes": [
-                "sha256:5c6473d05bbea9c43359cc36701b5deec3c925f5311963786e1346544c1a68c0",
-                "sha256:8ce037c971f421cfb47d38c097ca233a8f6dd42d9e9501a37e02dd7d08c5cb3f"
+                "sha256:2a6fe22f319d71fd0ea1e70cded76c6449225cb9903234f8992ee3d21eded5e8",
+                "sha256:6005d030df924f85088454c18bd35dcf082b058aa355ad3df520d8de9aef9f41"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.12'",
-            "version": "==6.0.9"
+            "version": "==6.0.10"
         },
         "django-allauth": {
             "hashes": [
@@ -441,6 +441,15 @@
             "index": "pypi",
             "markers": "python_version >= '3.9'",
             "version": "==4.9.0"
+        },
+        "django-redis": {
+            "hashes": [
+                "sha256:4b23aa6e0cd0937bb1242e9a463809e6004de3ca2150f34e986306bb6220d688",
+                "sha256:e48491c862f4350b0747ceb1016700686fb93c4f4e0fb9c490fe6c6658ffd933"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.10'",
+            "version": "==7.0.0"
         },
         "django-timezone-field": {
             "hashes": [
@@ -901,11 +910,11 @@
         },
         "sqlparse": {
             "hashes": [
-                "sha256:113c35c75365ab9cc9c7231d68c6428fb11c085fc8e9eb1ad659b7ddbf6cd2b9",
-                "sha256:b861c0288ce2fa56209a9a6412d2e066ac664b3873b89c26c9d8415e8e32996f"
+                "sha256:3be5a72d04c873d690d7c6dedd33d6fae2ef82759881ceec02fc2efd0cba564f",
+                "sha256:ca722573f848ff2d30e40ea30f53a104b7dea7635ea9285891263eb2c58fb6e7"
             ],
             "markers": "python_version >= '3.10'",
-            "version": "==0.6.0"
+            "version": "==0.6.1"
         },
         "typing-extensions": {
             "hashes": [

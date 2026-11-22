@@ -20,6 +20,7 @@ django-allauth = "*"
 djangorestframework-simplejwt = "*"
 dj-rest-auth = "*"
 cryptography = "*"
+django-redis = "*"
 
 [dev-packages]
 
