@@ -69,7 +69,17 @@ export default function ProfilePage() {
     e.preventDefault();
     try {
       const response = await API.patch('/users/profile', formData);
+      
+      // 1. Update state
+      setUser(response.data.user);
 
+      // 2. Save the new data into localStorage so getStoredUser() can read it
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+
+      // DISPATCH: Sends out the signal right after the DB save succeeds!
+      window.dispatchEvent(new CustomEvent('refreshHeader'));
+      window.dispatchEvent(new Event('userUpdated'));
+      
       toast.success("Profile updated successfully!");
       setIsEditing(false);
     } catch (err) {
