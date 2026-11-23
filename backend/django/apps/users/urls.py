@@ -1,6 +1,5 @@
 from django.urls import path, include
-from .views import UserProfileAPIView, LoginUserAPIView, RegisterUserAPIView, LogoutUserAPIView, GoogleLogin, PasswordChangeAPIView
-
+from .views import UserProfileAPIView, LoginUserAPIView, RegisterUserAPIView, LogoutUserAPIView, GoogleLogin, PasswordChangeAPIView, PasswordResetConfirmView, PasswordResetRequestView,  PasswordResetVerifyView
 urlpatterns = [
     path("register", RegisterUserAPIView.as_view(), name="register-user"),
     path("login", LoginUserAPIView.as_view(), name="login-user"),
@@ -10,5 +9,7 @@ urlpatterns = [
     path("profile", UserProfileAPIView.as_view(), name="profile-user"),
     path("change-password", PasswordChangeAPIView.as_view(), name="change-password"),
 
-    path("forgot-password", include("dj_rest_auth.urls")), # only keep dj-rest-auth for Password Reset
+    path("forgot-password", PasswordResetRequestView.as_view(), name="password-reset-request"),
+    path("verify-reset-code", PasswordResetVerifyView.as_view(), name="verify-reset-code"),
+    path("reset-password-confirm", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 ]
