@@ -64,7 +64,7 @@ class WriteModelSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # data is a dictionary containing all form fields
         if data.get('password') != data.get('confirm_password'):
-            raise serializers.ValidationError({
+            raise DRFValidationError({
                 "confirm_password": "The two password fields didn't match."
             })
         return data
@@ -80,14 +80,14 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         # Check if the old password typed by user is correct
         if not user.check_password(value):
-            raise serializers.ValidationError("Your old password was entered incorrectly.")
+            raise DRFValidationError("Your old password was entered incorrectly.")
         return value
 
     # Object-Level Validation (validate) --to compare multiple fields against each other.
     def validate(self, data):
         # Check if new password and confirmation match
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({
+            raise DRFValidationError({
                 "confirm_password": ["The two password fields didn't match."]
             })
         return data
@@ -104,3 +104,27 @@ class ReadUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "username", "phone_number", "date_joined", "last_login", "groups", "is_staff", "is_superuser"]
         read_only_fields = ["id"]
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class PasswordResetVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
+    new_password = serializers.CharField(write_only=True, min_length=6)
+    confirm_new_password = serializers.CharField(write_only=True, min_length=6)
+
+    def validate(self, data):
+        # Check if new password and confirmation match
+        if data['new_password'] != data['confirm_new_password']:
+            raise DRFValidationError({
+                "confirm_new_password": ["The two password fields didn't match."]
+            })
+
+        data.pop('confirm_new_password', None) # Remove it so validated_data only keeps parameters needed by service
+        return data
