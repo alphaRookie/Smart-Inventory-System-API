@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from django.contrib.auth.models import update_last_login  
 
 from .models import User
-from .serializers import WriteModelSerializer, WriteNonModelSerializer, ReadUserSerializer,  ChangePasswordSerializer
+from .serializers import WriteModelSerializer, WriteNonModelSerializer, ReadUserSerializer,  ChangePasswordSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer, PasswordResetVerifySerializer
 from .services import UserService
 from .permissions import IsAccOwner, IsManager
 
@@ -140,3 +140,44 @@ class LogoutUserAPIView(APIView): # This logs out the refresh_token, not access_
             
         except Exception as e:
             return Response({"error": "Invalid token or already logged out."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PasswordResetRequestView(APIView):
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data) 
+
+        try: 
+            UserService.request_password_reset(validated_data['email'])
+            return Response({"message": "If this email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        
+class PasswordResetVerifyView(APIView):
+    def post(self, request):
+        serializer = PasswordResetVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data) 
+        
+        try:
+            # Service just checks if code matches and hasn't expired
+            UserService.verify_password_reset_code(**validated_data) 
+            return Response({"message": "Code is valid!"}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class PasswordResetConfirmView(APIView):
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict, serializer.validated_data) 
+        
+        try:
+            UserService.confirm_password_reset( **validated_data)
+            return Response({"message": "Password reset successfully!"}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
