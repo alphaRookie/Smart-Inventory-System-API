@@ -213,7 +213,11 @@ CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_raw.split(",")
 # -------------------- Auth --------------------
 
 # Tell dj-rest-auth to use JWT tokens
-REST_USE_JWT = True
+REST_AUTH = {
+    "USE_JWT": True,
+    "JWT_AUTH_HTTPONLY": False,  # otherwise refresh token goes into a cookie, not the response body
+    "USER_DETAILS_SERIALIZER": "users.serializers.ReadUserSerializer", # returns the response to frontend, so user obj data can be stored in state
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
@@ -234,4 +238,30 @@ SIMPLE_JWT = {
 # Account Settings for AllAuth
 ACCOUNT_LOGIN_METHODS = {'email'} # use email instead username
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*'] # `*` means required
+# case: login by form, then login using existing email google account again (so we merge it)
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
+
+# Setup Email service
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
+
+
+
+# -------------------- Caching to handle OTP --------------------
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1", # /1 means database #1 in Redis
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
