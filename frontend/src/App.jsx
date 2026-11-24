@@ -26,6 +26,7 @@ import DisplayNotif from './pages/settings/Notification';
 
 import LoginPage from './pages/settings/auth/Login';
 import RegisterPage from './pages/settings/auth/Register';
+import ForgotPasswordPage from './pages/settings/auth/ForgotPassword';
 import ProfilePage from './pages/settings/Profile';
 
 
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         </Route>
 
         <Route element={<ProtectedRoute />}>
