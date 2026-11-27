@@ -1,7 +1,6 @@
-# Smart Inventory System API
+# AI-Powered Retail & Warehouse ERP
 
-This project is built by **asynchronous dual-backend system** using **Django REST Framework** (relational database management, business rules, and background tasks) and **FastAPI** (high-performance Machine Learning inference). This architecture keeps the primary app stays fast while the AI service handles the heavy weather calculations in the background.
-
+A full-stack retail and warehouse management platform built with an **asynchronous dual-backend architecture** using **Django REST Framework** and **FastAPI**. This backend architecture keeps Django fast for daily operations while FastAPI handles live weather data and Machine Learning Calculation & forecasts in the background. Along with a **React** as frontend, it gives a clean UI, role-based access that stops non-managers from viewing manager tools, and real-time stock alerts.
 
 ## **Key Features**
 
@@ -60,7 +59,7 @@ For those who want to run everything directly on their computer.
 
 1. **Clone the repository**
     ```bash
-    git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
+    git clone https://github.com/alphaRookie/Smart-Warehouse-Retail-ERP.git
     cd pyproject2
     ```
 
@@ -112,7 +111,7 @@ For those who want to run the full application inside isolated containers.
 
 1. **Clone the repository**
     ```bash
-    git clone https://github.com/alphaRookie/Smart-Inventory-System-API.git
+    git clone https://github.com/alphaRookie/Smart-Warehouse-Retail-ERP.git
     cd pyproject2
     ```
 
