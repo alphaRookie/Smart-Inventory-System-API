@@ -21,6 +21,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("inventory/", include("inventory.urls")),
+    path("users/", include("users.urls")),
 
     #Swagger/Redoc
     path('api/schema', SpectacularAPIView.as_view(), name='schema'), # This generates the "Schema" (the raw data)

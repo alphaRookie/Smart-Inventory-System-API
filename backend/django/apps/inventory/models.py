@@ -103,7 +103,7 @@ class OrderPrediction(models.Model):
         return f"Order prediction for: {self.product.name}"
 
 
-class SpoilageNotification(models.Model):
+class SpoilageCheck(models.Model):
     class Level(models.TextChoices):
         WARNING = "WARNING", _("Warning")
         DANGER = "DANGER", _("Danger")
@@ -111,8 +111,30 @@ class SpoilageNotification(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     message = models.TextField()
     level = models.CharField(max_length=10, choices=Level.choices, default=Level.WARNING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.product.name}: {self.level}"
+
+
+class Notification(models.Model):
+    class Category(models.TextChoices):
+        SPOILAGE = "SPOILAGE", _("Spoilage")
+        ORDER_PRED = "ORDER_PRED", _("Order Prediction")
+        SYSTEM = "SYSTEM", _("System")
+
+    class Level(models.TextChoices):
+        INFO = "INFO", _("Info")
+        WARNING = "WARNING", _("Warning")
+        DANGER = "DANGER", _("Danger")
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.SPOILAGE)
+    title = models.CharField(max_length=100, blank=True)
+    message = models.TextField()
+    level = models.CharField(max_length=10, choices=Level.choices, default=Level.WARNING)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Notification for {self.product.name}: {self.level}"
+        return f"[{self.category}] {self.message[:30]}"

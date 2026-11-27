@@ -14,10 +14,11 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Points to project root folder where .env and manage.py live
-# call .parent 5 times bcoz .env located at 5th parent (root folder)
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
+# call .parent 4 times bcoz .env located at 4th parent (root folder)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Load variables from .env into os.environ
 load_dotenv(BASE_DIR / ".env")
@@ -38,7 +39,7 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '*').split(
 
 
 # -------------------- Application definition --------------------
-
+# celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -46,13 +47,56 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
+    'django.contrib.sites', # required by Oauth2
+
+    # my apps
     'inventory.apps.InventoryConfig',
-    'drf_spectacular'
-    # celery, httpx, redis, and python-dotenv do not need to be declared inside here (they are Python libraries, not Django app)
+    'users.apps.UsersConfig',
+
+    # core utility
+    'rest_framework',
+    'rest_framework.authtoken', # required by dj-rest-auth
+    'drf_spectacular',
+    'corsheaders',
+    'django_celery_beat',
+
+    #JWT
+    'rest_framework_simplejwt.token_blacklist',
+
+    # Oauth2
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google', # more could be add like facebook etc
+
+    # The bridge package
+    'dj_rest_auth',
+    'dj_rest_auth.registration', # enables `/registration` endpoint
 ]
 
+SITE_ID = 1 # Required whenever 'django.contrib.sites' is used
+
+# Provide Google OAuth App credentials directly
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.environ.get('GOOGLE_CLIENT_ID'),
+            'secret': os.environ.get('GOOGLE_CLIENT_SECRET'),
+            'key': ''
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+
+
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -60,6 +104,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core_config.urls'
@@ -95,6 +141,9 @@ DATABASES = {
         'PORT': os.environ['DB_PORT'],
     }
 }
+
+# force django to use my custom user
+AUTH_USER_MODEL = 'users.User'
 
 
 
@@ -136,37 +185,8 @@ CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
 CELERY_ACCEPT_CONTENT = ['json'] # which format to accept
 CELERY_TASK_SERIALIZER = 'json'
 
-
-
-from celery.schedules import crontab # crontab has options: run at exact times of the day, specific days of the week, or precise calendar dates
-
-# custom hour & minutes, also day gap of running
-run_inventory_check_every = int(os.getenv("RUN_INVENTORY_CHECK_EVERY", 1))
-run_spoilage_check_every = int(os.getenv("RUN_SPOILAGE_CHECK_EVERY", 1))
-
-h_inv_check = int(os.getenv("H_INV_CHECK", 1))
-m_inv_check = int(os.getenv("M_INV_CHECK", 0))
-
-h_spoil_check = int(os.getenv("H_SPOIL_CHECK", 1))
-m_spoil_check = int(os.getenv("M_SPOIL_CHECK", 30))
-
-CELERY_BEAT_SCHEDULE = { # when to run task
-    'run-predictions-midnight': {
-        'task': 'inventory.tasks.run_inventory_check',
-        'schedule': crontab(hour=h_inv_check, minute=m_inv_check, day_of_month=f"*/{run_inventory_check_every}"),  # Runs every .. day at 1:00 AM
-    },
-    'run-spoilage-midnight': {
-        'task': 'inventory.tasks.run_spoilage_check',
-        'schedule': crontab(hour=h_spoil_check, minute=m_spoil_check, day_of_month=f"*/{run_spoilage_check_every}"), # Runs every .. day at 1:30 AM
-    },
-}
-
-
-
-# -------------------- DRF --------------------
-REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
-}
+# Configure Celery to use Django's database as the beat scheduler
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 
@@ -175,4 +195,73 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Inventory Management System API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+}
+
+
+
+# -------------------- set-up CORS --------------------
+
+cors_origins_raw = os.getenv(
+    "CORS_ALLOWED_ORIGINS", 
+    "http://localhost:5173,http://127.0.0.1:5173"
+)
+# cleans up accidental spaces and trailing commas
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+
+
+
+# -------------------- Auth --------------------
+
+# Tell dj-rest-auth to use JWT tokens
+REST_AUTH = {
+    "USE_JWT": True,
+    "JWT_AUTH_HTTPONLY": False,  # otherwise refresh token goes into a cookie, not the response body
+    "USER_DETAILS_SERIALIZER": "users.serializers.ReadUserSerializer", # returns the response to frontend, so user obj data can be stored in state
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # Tell DRF to use drf-spectacular for generating schemas
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+# Account Settings for AllAuth
+ACCOUNT_LOGIN_METHODS = {'email'} # use email instead username
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*'] # `*` means required
+# case: login by form, then login using existing email google account again (so we merge it)
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+
+
+# Setup Email service
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
+
+
+
+# -------------------- Caching to handle OTP --------------------
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1", # /1 means database #1 in Redis
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
 }
