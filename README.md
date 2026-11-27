@@ -15,6 +15,10 @@ This project is built by **asynchronous dual-backend system** using **Django RES
 * **🚨 Smart Spoilage Detection (No Spam):** Calculates the financial risk of possibility products to be expired. If an item will sell out before expiring, the system skips the warning so your feed stays clean.
 * **📱 Instant Telegram Lock-Screen Alerts:** When real spoilage risk is detected, the system formats a clean summary and sends a push notification straight to your Telegram.
 * **📦 Zero Manual Setup & Dependency Care:** No need to manually install packages or worry about conflicting versions. Whether running locally with `pipenv install` or launching via Docker, all required packages and exact versions install automatically thanks to `Pipfile` and `Pipfile.lock`.
+- **🔐 Role-Based Access Control (RBAC):** Every user account has a strict role level (`Manager`, `Worker`, or `Standard User`).
+- **🔑 Secure JWT Auth & Email OTP Recovery:** Supports JWT authentication with automatic token rotation, Google OAuth login, and a 3-step password reset flow with 6-digit codes cached in Redis.
+- **🔔 In-App Notification Center:** Tracks batch runs and stock alerts right inside the app with live unread counters, `DANGER`/`WARNING`/`INFO` severity tags, and one-click mark-as-read actions.
+- **📊 Complex Analytics Dashboard (Upcoming):** Currently building visual charts and deep reports to track sales trends, spoilage loss savings, shelf turnover, and ML forecast accuracy over time.
 
 ---
 
@@ -38,6 +42,15 @@ A fast, lightweight service built purely for machine learning predictions and fe
 * **Threaded Math Processing:** Runs heavy Machine Learning calculations in background worker threads so API requests do not lag.
 * **Custom ML Training Pipeline (`.ipynb`):** Trained a custom `RandomForestRegressor` model from scratch using Scikit-Learn, checked accuracy using MAE and R^2 scores, and saved the trained model directly as a `.joblib` file.
 
+
+### 3. React Service — Modern Frontend & Role-Based UI
+A fast, responsive web interface built with **React (Vite)**, **React Router**, and **Tailwind CSS** that connects seamlessly to the Django REST API.
+
+- **Strict Role-Based UI Rendering:** Dynamically hides or unlocks navigation links, dropdown, and restricted pages based on the user's role (`Manager`, `Worker`, or `User`).
+- **Live Notification Dropdown:** Displays real-time unread alert counters in the top bar with color-coded `DANGER`, `WARNING`, and `INFO` badges.
+- **Smooth Auth & Recovery Flows:** Handles JWT sessions, Google social login, and a clean 3-step password reset flow with instant backend error handling and toast feedback.
+- **Upcoming Complex Analytics Dashboard:** Preparing interactive data charts and deep inventory reports to turn raw sales, shelf, and spoilage logs into clear business insights.
+
 ---
 
 ## **Installation**
@@ -51,53 +64,12 @@ For those who want to run everything directly on their computer.
     cd pyproject2
     ```
 
-2. **Configure `.env` file**
-Create a `.env` file in your project root containing all of these configuration:
-> [!NOTE]
-> Make sure to create `.env` file in the project root, otherwise you need to change `.parent` config path inside `settings.py`
-    ```env
-    # ----- Django Core Settings -----
-    SECRET_KEY=...
-    DEBUG=True # Set to False in production
-    ALLOWED_HOSTS=127.0.0.1,localhost,django #refer to django container name
+2. **Configure `.env` files**
+    Create a `.env` file for both the backend and frontend, and fill in your own configuration, details, and settings by following [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example).
 
-    # ----- Database Configuration -----
-    DB_NAME=...
-    DB_USER=...
-    DB_PASSWORD=...
-    DB_HOST=127.0.0.1
-    DB_PORT=5432
-
-    # ----- Order Prediction Parameters -----
-    LOOKBACK_DAYS_SALES=... # find all sales data for the past ... days (to calculate avg daily demand)
-    TARGET_DAYS_PREDICTION=... # number of upcoming days to predict stock demand (limit to 5 by OpenWeather)
-
-    # ----- Spoilage Check Parameter -----
-    DAYS_TO_EXPIRE=... # for example, if you choose 7, you will be notified if a certain product will be expired in 7 days
-
-    # ----- Automatic background Task Scheduler ----- 
-    # for example: this will auto-run inventory check every 2 days, exactly at 1:15
-    RUN_INVENTORY_CHECK_EVERY=2 # day based
-    H_INV_CHECK=1 # hour(24-hour format: 0-23)
-    M_INV_CHECK=15 # minute
-
-    RUN_SPOILAGE_CHECK_EVERY=... 
-    H_SPOIL_CHECK=...
-    M_SPOIL_CHECK=...
-
-    # ----- Spoilage Notification Alert via Telegram -----
-    TELEGRAM_BOT_TOKEN=... # Secret API Token obtained from Telegram @BotFather
-    TELEGRAM_CHAT_ID=... # Target Telegram chat/user ID for receiving notifications
-
-
-    # ---------- OpenWeather Api Setting ----------
-    # create account and get the api_key from openweatherapi 
-    API_KEY=...
-
-    # get coordinate: go to google maps, and right click your exact location, the first row will show LAT & LON
-    STORE_LAT=...
-    STORE_LON=...
-    ```
+    > [!NOTE]
+    > Make sure to create both `.env` file in the exact same level as its `.env.example` (`backend/.env` and `frontend/.env`). Otherwise, you will need to change the `.parent` config path inside `settings.py`.
+    
 
 3. **Install dependencies**
     * **Django:**
